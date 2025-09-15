@@ -4,14 +4,6 @@
 #include <SPI.h>
 
 
-// SX1278 has the following connections:
-// NSS pin:   16
-// DIO0 pin:  2
-// RESET pin: 17
-// DIO1 pin:  5
-// SX1278 radio = new Module(16, 2, 17, 5);
-// For 2m aprs, uses DIO2 connected to 21
-
 void transmit_2m(){
   SX1278 radio = new Module(16, 2, 17, 5);
   AFSKClient audio(&radio, 21);
