@@ -1,5 +1,5 @@
-// Contains pin definitions
-
+// Contains pin definitions for rpi 2040
+#pragma once
 
 
 // SX1278 has the following connections:
