@@ -17,18 +17,18 @@ constexpr int sxMOSI_pin = 3;     // 3, 7, 19, 23  }
 constexpr int sxMISO_pin = 0;     // 0, 4, 16, 20  }
 constexpr int sxCS_pin = 1;       // 1, 5, 17, 21  }
 
-constexpr int sxNSS_pin = 16;
-constexpr int sxDIO0_pin = 2;
-constexpr int sxRESET_pin = 17;
-constexpr int sxDIO1_pin = 15;
-constexpr int sxDIO2_pin = 21;
+constexpr int sxNSS_pin = 13;
+constexpr int sxDIO0_pin = 14;
+constexpr int sxRESET_pin = 15;
+constexpr int sxDIO1_pin = 26;
+constexpr int sxDIO2_pin = 27;
 
 
 // gps pin defs
-constexpr int gpsTX_pin = 8;
-constexpr int gpsRX_pin = 9;
+constexpr int gpsTX_pin = 4;
+constexpr int gpsRX_pin = 5;
 
 
 // other pin defs
-constexpr int vsense_pin = 26;
-
+constexpr int vsensesolar_pin = 28; // uses 0.5x voltage divider
+constexpr int vsensebat_pin = 29; // uses 0.5x voltage divider
