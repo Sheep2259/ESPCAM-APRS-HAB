@@ -38,14 +38,23 @@ void loop() {
   batvoltage = analogRead(vsensebat_pin);
   int uptime = millis() / 1000;
 
-  sprintf(messagelora, "lora,PV:%d,BV:%d,UP:%d,C:%d", solarvoltage, batvoltage, uptime, counter);
-  sprintf(message2m, "2m,PV:%d,BV:%d,UP:%d,C:%d", solarvoltage, batvoltage, uptime, counter);
+  sprintf(messagelora, "u,S%d,B%d,T%d,C%d", solarvoltage, batvoltage, uptime, counter);
+  sprintf(message2m, "v,S%d,B%d,T%d,C%d", solarvoltage, batvoltage, uptime, counter);
 
-  for (int i = 0; i < 1; i++) {
+
+  // the following things must be transmitted periodically:
+  // a range of packet lengths to test how many characters are usable,
+  // packets with a wide veriaty of characters so we can tell which ones can be used for encoding,
+  // packets in clusters, as in many consecutive transmission in a row to test large data thoughputs
+
+
+  // i think aprs has a min 5s between packets
+  // so possibly test alternating callsign to bypass
+
+  for (int i = 0; i < 3; i++) {
     transmit_2m(callsign, destination, latitude, longitude, message2m);
-    delay(6000);
-
-    transmit_lora(callsign, destination, latitude, longitude, messagelora);
+    delay(100);
+    transmit_2m(callsign, destination, latitude, longitude, message2m);
     delay(6000);
 
     counter++;
