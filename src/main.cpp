@@ -47,7 +47,9 @@ void loop() {
   // packets with a wide veriaty of characters so we can tell which ones can be used for encoding,
   // packets in clusters, as in many consecutive transmission in a row to test large data thoughputs
 
+  // Mixed radix encoding should probably be used, same as big number encoding on traquito wspr
 
+  // aprs may have a comment message limit of 67 chars, although not certain
   // i think aprs has a min 5s between packets
   // so possibly test alternating callsign to bypass
 
