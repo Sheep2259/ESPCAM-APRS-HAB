@@ -10,25 +10,44 @@
 #include <BigNumber.h>
 #include <tuple>
 #include <vector>
+#include <encoder.h>
 
 int batvoltage;
 int solarvoltage;
 int counter = 0;
-int seconds;
 
-float lat = 0.0f, lng = 0.0f, age_s = -1.0f;
-float alt = 0.0f, speed_kmh = -1.0f, course_deg = -1.0f, hdop = -1.0f;
+
+float lat = 0.0f, lng = 0.0f, age_s = 3600.0f, hdop = 0.0f;
+float alt = 0.0f, speed_kmh = 0.0f, course_deg = 0.0f;
 uint16_t year = 0;
-uint8_t month = 0, day = 0, hour = 0, minute = 0, second = 0, centisecond = 0, sats = 0;
+uint8_t month = 0, day = 0, hour = 0, minute = 0, second = 9, centisecond = 0, sats = 0;
 
 
-// structure of the data that we feed into the mixed radix encoder (not done)
+uint16_t enc_alt = 80, enc_speed = 0, enc_hdop = 0, enc_bat = 1, enc_pv = 1;
+
+
+
+// default aprs packet, variables change when we have more data like gps
+char callsign[] = "M7CWV";
+char destination[] = "APRS";
+char latitude[] = "0000.00N";
+char longitude[] = "00000.00E";
+char messagelora[] = "lora transmission";
+char message2m[] = "2m transmission";
+
+
+
+
+// structure (and bases) of the data that we feed into the mixed radix encoder (not done)
 std::vector<std::tuple<uint16_t, uint16_t>> digits_and_bases = {
     //{frequency, 1}, // 0 for vhf (2m), 1 for uhf (lora)
-    {second, 60},
+    {enc_alt, 280},
     {sats, 40},
-    {alt, 14000},
-    {}
+    {enc_speed, 62},
+    {enc_hdop, 270},
+    {enc_bat, 410},
+    {enc_pv, 410},
+    {counter, 1000}
 };
 
 
@@ -55,14 +74,6 @@ void setup() {
 
 
 void loop() {
-  char callsign[] = "M7CWV";
-  char destination[] = "APRS";
-  char latitude[] = "4911.67N";
-  char longitude[] = "01635.96E";
-  char messagelora[] = "lora transmission";
-  char message2m[] = "2m transmission";
-
-
 
   solarvoltage = analogRead(vsensesolar_pin);
   batvoltage = analogRead(vsensebat_pin);
@@ -76,7 +87,7 @@ void loop() {
 
   // SEE README FOR INSTRUCTIONS
 
-  /*
+  
   for (int i = 0; i < 3; i++) {
     transmit_2m(callsign, destination, latitude, longitude, message2m);
     delay(100);
@@ -85,7 +96,7 @@ void loop() {
 
     counter++;
   }
-  */
+  
 
 
   	// This sketch displays information every time a new sentence is correctly encoded.
@@ -96,7 +107,22 @@ void loop() {
               hour, minute, second, centisecond,
               alt, speed_kmh, course_deg,
               sats, hdop);
+          
+        char latbuf[16];
+        char lngbuf[16];
+        aprsFormatLat(lat, latbuf, sizeof(latbuf));
+        aprsFormatLng(lat, lngbuf, sizeof(lngbuf));
+        char latitude = latbuf[16];
+        char longitude = lngbuf[16];
 
+        MRencode_convert(hdop, alt, speed_kmh, course_deg, batvoltage, solarvoltage, &enc_alt, &enc_speed, &enc_hdop, &enc_bat, &enc_pv);
+
+
+        BigNumber payload = encodeMixedRadix(digits_and_bases);
+
+
+
+  /*
   Serial.print("Lat: "); Serial.println(lat, 6);
   Serial.print("Lng: "); Serial.println(lng, 6);
   Serial.print("Age (s): "); Serial.println(age_s, 2);
@@ -110,9 +136,16 @@ void loop() {
   Serial.print("HDOP: "); Serial.println(hdop, 2);
 
   delay(1000);
-      
+      */
 		}
 	}
+  
+
+
+
+
+  BigNumber encoded = encodeMixedRadix(digits_and_bases);
+  Serial.println(encoded);
 }
 
 
