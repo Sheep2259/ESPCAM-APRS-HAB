@@ -5,6 +5,52 @@
 
 // THIS IS ALL UNTESTED
 
+#include <BigNumber.h>
+
+const char base91_chars[] =
+    "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+
+String toBase91(BigNumber n) {
+  if (n == 0) return String(base91_chars[0]);
+  BigNumber base = 91;
+  String result = "";
+
+  while (n > 0) {
+    BigNumber quotient = n / base;
+    BigNumber remainder = n - quotient * base;  // manual modulo
+
+    // Convert remainder -> int safely via string
+    String rStr = remainder.toString();
+    int rem = rStr.toInt();  // guaranteed < 91
+
+    result = String(base91_chars[rem]) + result;
+    n = quotient;
+  }
+
+  return result;
+}
+
+/*
+BigNumber fromBase91(const String &s) {
+  BigNumber base = 91;
+  BigNumber result = 0;
+
+  for (int i = 0; i < s.length(); i++) {
+    char c = s[i];
+    const char *pos = strchr(base91_chars, c);
+    if (!pos) continue;  // ignore invalid chars
+    BigNumber val((long)(pos - base91_chars));  // wrap in BigNumber
+    result = result * base + val;
+  }
+
+  return result;
+}
+*/
+
+
+
+
+
 BigNumber encodeMixedRadix(const std::vector<std::tuple<uint16_t, uint16_t>>& digits_and_bases)
 {
     BigNumber encoded = 0;

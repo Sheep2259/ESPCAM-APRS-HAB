@@ -17,6 +17,8 @@
 
 BigNumber encodeMixedRadix(const std::vector<std::tuple<uint16_t, uint16_t>>& digits_and_bases);
 
+String toBase91(BigNumber n);
+
 void MRencode_convert(float hdop, float alt, float speed_kmh, float course_deg,
                       uint16_t batvoltage, uint16_t PVvoltage,
                       uint16_t *enc_alt, uint16_t *enc_speed,

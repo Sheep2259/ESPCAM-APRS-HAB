@@ -87,7 +87,7 @@ void loop() {
 
   // SEE README FOR INSTRUCTIONS
 
-  
+  /*
   for (int i = 0; i < 3; i++) {
     transmit_2m(callsign, destination, latitude, longitude, message2m);
     delay(100);
@@ -96,7 +96,7 @@ void loop() {
 
     counter++;
   }
-  
+  */
 
 
   	// This sketch displays information every time a new sentence is correctly encoded.
@@ -117,8 +117,14 @@ void loop() {
 
         MRencode_convert(hdop, alt, speed_kmh, course_deg, batvoltage, solarvoltage, &enc_alt, &enc_speed, &enc_hdop, &enc_bat, &enc_pv);
 
+        BigNumber intpayload = encodeMixedRadix(digits_and_bases);
 
-        BigNumber payload = encodeMixedRadix(digits_and_bases);
+        String base91payload = toBase91(intpayload);
+
+        Serial.print(intpayload);
+        Serial.print(base91payload);
+
+        
 
 
 
