@@ -98,7 +98,7 @@ void loop() {
   }
   */
 
-
+  
   	// This sketch displays information every time a new sentence is correctly encoded.
 	while (ss.available() > 0) {
 		if (gps.encode(ss.read())) {
@@ -107,13 +107,9 @@ void loop() {
               hour, minute, second, centisecond,
               alt, speed_kmh, course_deg,
               sats, hdop);
-          
-        char latbuf[16];
-        char lngbuf[16];
-        aprsFormatLat(lat, latbuf, sizeof(latbuf));
-        aprsFormatLng(lat, lngbuf, sizeof(lngbuf));
-        char latitude = latbuf[16];
-        char longitude = lngbuf[16];
+         
+        aprsFormatLat(lat, latitude, sizeof(latitude));
+        aprsFormatLng(lng, longitude, sizeof(longitude));
 
         MRencode_convert(hdop, alt, speed_kmh, course_deg, batvoltage, solarvoltage, &enc_alt, &enc_speed, &enc_hdop, &enc_bat, &enc_pv);
 
@@ -121,14 +117,14 @@ void loop() {
 
         String base91payload = toBase91(intpayload);
 
-        Serial.print(intpayload);
-        Serial.print(base91payload);
-
+        Serial.println(intpayload);
+        Serial.println(base91payload);
+          
         
 
 
 
-  /*
+  
   Serial.print("Lat: "); Serial.println(lat, 6);
   Serial.print("Lng: "); Serial.println(lng, 6);
   Serial.print("Age (s): "); Serial.println(age_s, 2);
@@ -142,7 +138,7 @@ void loop() {
   Serial.print("HDOP: "); Serial.println(hdop, 2);
 
   delay(1000);
-      */
+      
 		}
 	}
   
@@ -150,8 +146,8 @@ void loop() {
 
 
 
-  BigNumber encoded = encodeMixedRadix(digits_and_bases);
-  Serial.println(encoded);
+  //BigNumber encoded = encodeMixedRadix(digits_and_bases);
+  //Serial.println(encoded);
 }
 
 

@@ -24,7 +24,7 @@ void MRencode_convert(float hdop, float alt, float speed_kmh, float course_deg,
                       uint16_t *enc_alt, uint16_t *enc_speed,
                       uint16_t *enc_hdop, uint16_t *enc_bat, uint16_t *enc_pv);
 
-String aprsFormatLat(float lat, char* buf, size_t bufSize);
-String aprsFormatLng(float lat, char* buf, size_t bufSize);
+void aprsFormatLat(float lat, char* buf, size_t bufSize);
+void aprsFormatLng(float lat, char* buf, size_t bufSize);
 
 #endif // ENCODE_MIXED_RADIX_H
