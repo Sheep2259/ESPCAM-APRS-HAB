@@ -19,7 +19,7 @@ void transmit_2m(char callsign[], char destination[], char latitude[], char long
     return;
   }
   // initialize SX1278 for 2m APRS
-  int beginfskstate = radio.beginFSK(GEOFENCE_APRS_frequency / 1000000);
+  int beginfskstate = radio.beginFSK(GEOFENCE_2mAPRS_frequency / 1000000);
 
   // initialize AX.25 client
   // source station SSID:         0

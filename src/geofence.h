@@ -170,14 +170,13 @@ static float YemenF[] = {
 };
 
 // VARIABLES
-extern uint32_t GEOFENCE_2mAPRS_frequency; 
-extern uint32_t GEOFENCE_loraAPRS_frequency; 
-extern uint32_t GEOFENCE_no_tx;
+extern float GEOFENCE_2mAPRS_frequency; 
+extern float GEOFENCE_loraAPRS_frequency; 
+extern bool GEOFENCE_no_tx;
 
 
 
 // FUNCTIONS
-int32_t pointInPolygon(int32_t polyCorners, int32_t * polygon, int32_t latitude, int32_t longitude);
 int32_t pointInPolygonF(int32_t polyCorners, float * polygon, float latitude, float longitude);
 void GEOFENCE_position(float latitude, float longitude);
 
