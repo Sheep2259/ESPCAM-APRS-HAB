@@ -1,11 +1,9 @@
 #include <Arduino.h>
 #include <rpi_defs.h>
 #include <TinyGPSPlus.h>
-#include <SoftwareSerial.h>
 
 
 TinyGPSPlus gps;
-SoftwareSerial ss(gpsRXPin, gpsTXPin);
 
 
 

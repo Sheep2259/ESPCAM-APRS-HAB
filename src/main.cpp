@@ -42,7 +42,7 @@ char message2m[] = "placeholder";
 // structure (and bases) of the data that we feed into the mixed radix encoder, updated every gps read
 std::vector<std::tuple<uint16_t, uint16_t>> digits_and_bases = {
     //{frequency, 1}, // 0 for vhf (2m), 1 for uhf (lora)
-    {enc_alt, 280},
+    {enc_alt, 720},
     {sats, 40},
     {enc_speed, 62},
     {enc_hdop, 270},
@@ -51,14 +51,13 @@ std::vector<std::tuple<uint16_t, uint16_t>> digits_and_bases = {
     {counter, 1000}
 };
 
-char* base91payload;
+char base91payload[150];
 
 
 
 void setup() {
   Serial.begin(115200);
-  Serial.print("test");
-  
+
   SPI.setRX(sxMISO_pin); // MISO
   SPI.setTX(sxMOSI_pin); // MOSI
   SPI.setSCK(sxSCK_pin); // SCK
@@ -69,7 +68,13 @@ void setup() {
 
   analogReadResolution(12);
   
-  ss.begin(GPSBaud);
+  Serial2.setRX(gpsRXPin); // Pin 5
+  Serial2.setTX(gpsTXPin); // Pin 4
+  Serial2.begin(GPSBaud);  // 9600
+
+  // debug Serial.println("serial1 init done");
+  // debug delay(25);
+
 
   BigNumber::begin ();
 
@@ -85,8 +90,8 @@ void loop() {
 
   unsigned long start = millis(); // start of loop time
 
-	while (ss.available() > 0 && (millis() - start < 1000)) { // give gps loop max of 1s to complete, to avoid getting stuck 
-		if (gps.encode(ss.read())) {
+	while (Serial2.available() > 0 && (millis() - start < 1000)) { // give gps loop max of 1s to complete, to avoid getting stuck 
+		if (gps.encode(Serial2.read())) {
 			  displayInfo(lat, lng, age_s,
               year, month, day,
               hour, minute, second, centisecond,
@@ -101,44 +106,60 @@ void loop() {
 
         MRencode_convert(hdop, alt, speed_kmh, course_deg, batvoltage, solarvoltage, &enc_alt, &enc_speed, &enc_hdop, &enc_bat, &enc_pv);
 
-        std::vector<std::tuple<uint16_t, uint16_t>> digits_and_bases = {
-        //{frequency, 1}, // 0 for vhf (2m), 1 for uhf (lora)
-        {enc_alt, 280},
-        {sats, 40},
-        {enc_speed, 62},
-        {enc_hdop, 270},
-        {enc_bat, 410},
-        {enc_pv, 410},
-        {counter, 1000}
-        };
-
         BigNumber intpayload = encodeMixedRadix(digits_and_bases);
 
-        String base91payload = toBase91(intpayload);
+        String tempPayload = toBase91(intpayload);
+        
+        memset(base91payload, 0, sizeof(base91payload));
 
-        char* buf;
-        base91payload.toCharArray(buf, 100);
-             
-      
+        tempPayload.toCharArray(base91payload, 150);
+     
 		}
 	} 
 
+  Serial.print("Lat: "); Serial.println(lat, 6);
+  Serial.print("Lng: "); Serial.println(lng, 6);
+  Serial.print("Age (s): "); Serial.println(age_s, 2);
+  Serial.print("Date: "); Serial.print(day); Serial.print("/"); Serial.print(month); Serial.print("/"); Serial.println(year);
+  Serial.print("Time (UTC): ");
+  Serial.print(hour); Serial.print(":"); Serial.print(minute); Serial.print(":"); Serial.println(second);
+  Serial.print("Alt (m): "); Serial.println(alt, 2);
+  Serial.print("Speed (km/h): "); Serial.println(speed_kmh, 2);
+  Serial.print("Course (deg): "); Serial.println(course_deg, 2);
+  Serial.print("Satellites: "); Serial.println(sats);
+  Serial.print("HDOP: "); Serial.println(hdop, 2);
+  Serial.print("Counter: "); Serial.println(counter);
+  Serial.println();
+  
+
+  std::vector<std::tuple<uint16_t, uint16_t>> digits_and_bases = {
+  //{frequency, 1}, // 0 for vhf (2m), 1 for uhf (lora)
+  {enc_alt, 720},
+  {sats, 40},
+  {enc_speed, 62},
+  {enc_hdop, 270},
+  {enc_bat, 410},
+  {enc_pv, 410},
+  {counter, 1000}
+  };
+
+
 
   if ( (counter % 2) == 0) { 
-    transmit_2m(callsign, destination, latitude, longitude, base91payload);
-    Serial.println(base91payload);
-    Serial.println("2m");
+    //transmit_2m(callsign, destination, latitude, longitude, base91payload);
+    Serial.print(base91payload);
+    Serial.println(" :2m payload");
     counter++;
   }
 
   else {
-    transmit_lora(callsign, destination, latitude, longitude, base91payload);
+    //transmit_lora(callsign, destination, latitude, longitude, base91payload);
     Serial.println(base91payload);
-    Serial.println("lora");
+    Serial.println(" :lora payload");
     counter++;
   }
 
-  delay(1000);
+  delay(3000);
 }
 
 

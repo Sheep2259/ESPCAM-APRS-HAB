@@ -44,7 +44,6 @@ void transmit_lora(char callsign[], char destination[], char latitude[], char lo
   }
 
   // initialize SX1278 with the settings necessary for LoRa iGates
-  Serial.print(F("[SX1278] Initializing ... "));
   // frequency:                   433.775 MHz
   // bandwidth:                   125 kHz
   // spreading factor:            12
@@ -52,7 +51,6 @@ void transmit_lora(char callsign[], char destination[], char latitude[], char lo
   int radiobeginstate = radio.begin(GEOFENCE_loraAPRS_frequency, 125, GEOFENCE_loraAPRS_sf, GEOFENCE_loraAPRS_cr);
 
   // initialize APRS client
-  Serial.print(F("[APRS] Initializing ... "));
   // symbol:                      '>' (car)
   // callsign                     "N7LEM"
   // SSID                         1
