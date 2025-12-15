@@ -49,7 +49,7 @@ void transmit_lora(char callsign[], char destination[], char latitude[], char lo
   // bandwidth:                   125 kHz
   // spreading factor:            12
   // coding rate:                 4/5
-  int radiobeginstate = radio.begin(GEOFENCE_loraAPRS_frequency, 125, GEOFENCE_loraAPRS_sf, 5);
+  int radiobeginstate = radio.begin(GEOFENCE_loraAPRS_frequency, 125, GEOFENCE_loraAPRS_sf, GEOFENCE_loraAPRS_cr);
 
   // initialize APRS client
   Serial.print(F("[APRS] Initializing ... "));

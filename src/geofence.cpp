@@ -12,6 +12,7 @@ bool GEOFENCE_no_tx = false;
 float GEOFENCE_2mAPRS_frequency = 144.800;
 float GEOFENCE_loraAPRS_frequency = 433.775;
 unsigned GEOFENCE_loraAPRS_sf = 12;
+unsigned GEOFENCE_loraAPRS_cr = 5;
 
 /*
 	Adapted version of pointInPolygon() function from:	http://alienryderflex.com/polygon/
@@ -88,6 +89,7 @@ void GEOFENCE_position(float latitude, float longitude)
 	GEOFENCE_2mAPRS_frequency = 144.800;
 	GEOFENCE_loraAPRS_frequency = 433.775;
 	GEOFENCE_loraAPRS_sf = 12;
+	GEOFENCE_loraAPRS_cr = 5;
 
     // --- PRIMARY ZONES (Specific) ---
     if(pointInPolygonF(9, ArgParUruF, latitude, longitude) == 1)

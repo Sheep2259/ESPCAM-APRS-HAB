@@ -51,7 +51,7 @@ std::vector<std::tuple<uint16_t, uint16_t>> digits_and_bases = {
     {counter, 1000}
 };
 
-
+char* base91payload;
 
 
 
@@ -83,27 +83,19 @@ void loop() {
   int uptime = millis() / 1000;
 
 
-  /*
-  for (int i = 0; i < 3; i++) {
-    transmit_2m(callsign, destination, latitude, longitude, message2m);
-    delay(100);
-    transmit_2m(callsign, destination, latitude, longitude, message2m);
-    delay(6000);
-
-    counter++;
-  }
-  */
-
   unsigned long start = millis(); // start of loop time
 
-	while (ss.available() > 0 && (millis() - start < 10)) { // give gps loop max of 1s to complete, to avoid getting stuck
+	while (ss.available() > 0 && (millis() - start < 1000)) { // give gps loop max of 1s to complete, to avoid getting stuck 
 		if (gps.encode(ss.read())) {
 			  displayInfo(lat, lng, age_s,
               year, month, day,
               hour, minute, second, centisecond,
               alt, speed_kmh, course_deg,
               sats, hdop);
-         
+        
+
+        GEOFENCE_position(lat, lng);
+        
         aprsFormatLat(lat, latitude, sizeof(latitude));
         aprsFormatLng(lng, longitude, sizeof(longitude));
 
@@ -124,19 +116,33 @@ void loop() {
 
         String base91payload = toBase91(intpayload);
 
-        Serial.println(intpayload);
-        Serial.println(base91payload);
-          
-        
-
-
-
-
-  delay(500);
+        char* buf;
+        base91payload.toCharArray(buf, 100);
+             
       
 		}
-	}  
+	} 
+
+
+  if ( (counter % 2) == 0) { 
+    transmit_2m(callsign, destination, latitude, longitude, base91payload);
+    Serial.println(base91payload);
+    Serial.println("2m");
+    counter++;
+  }
+
+  else {
+    transmit_lora(callsign, destination, latitude, longitude, base91payload);
+    Serial.println(base91payload);
+    Serial.println("lora");
+    counter++;
+  }
+
+  delay(1000);
 }
+
+
+
 
 
 
