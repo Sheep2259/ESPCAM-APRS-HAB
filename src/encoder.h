@@ -18,7 +18,7 @@ struct RadixItem {
 
 
 BigNumber encodeMixedRadix(RadixItem* items, size_t count);
-String toBase91(BigNumber n);
+void toBase91(BigNumber n, char* outBuf, size_t bufSize);
 
 
 void MRencode_convert(float hdop, float alt, float speed_kmh, float course_deg,

@@ -15,7 +15,7 @@
 
 
 int solarvoltage;
-int counter = 0;
+uint16_t counter = 0;
 
 
 float lat = 0.0f, lng = 0.0f, age_s = 3600.0f, hdop = 0.0f;
@@ -41,21 +41,25 @@ char message2m[] = "placeholder";
 
 // initialize bases here. Values (0) are placeholders.
 RadixItem payloadData[PAYLOAD_ITEMS] = {
-    {0, 720},  // Alt
+    {0, 720},  // encoded Alt
     {0, 40},   // Sats
-    {0, 62},   // Speed
-    {0, 270},  // HDOP
-    {0, 410},  // PV
+    {0, 62},   // encoded Speed
+    {0, 270},  // encoded HDOP
+    {0, 410},  // encoded PV
     {0, 1000}  // Counter
 };
 
 char base91payload[150];
 
 unsigned long lastTxTime = 0;
-const unsigned long TX_INTERVAL = 3000; // 3 seconds
+const unsigned long TX_INTERVAL = 2000; // 3 seconds
 
 
 void setup() {
+  
+  rp2040.wdt_begin(8000); // watchdog helps prevent brownout states from sunrise
+  delay(3000);
+
   Serial.begin(115200);
 
   SPI.setRX(sxMISO_pin); // MISO
@@ -119,11 +123,7 @@ void loop() {
 
     BigNumber intpayload = encodeMixedRadix(payloadData, PAYLOAD_ITEMS);
 
-    String tempPayload = toBase91(intpayload);
-          
-    memset(base91payload, 0, sizeof(base91payload));
-
-    tempPayload.toCharArray(base91payload, 150);
+    toBase91(intpayload, base91payload, sizeof(base91payload));
 
     Serial.print("Lat: "); Serial.println(lat, 6);
     Serial.print("Lng: "); Serial.println(lng, 6);
@@ -146,13 +146,15 @@ void loop() {
       //transmit_2m(callsign, destination, latitude, longitude, base91payload);
       Serial.print(base91payload);
       Serial.println(" :2m payload");
+      rp2040.wdt_reset();
       counter++;
     }
 
     else {
       //transmit_lora(callsign, destination, latitude, longitude, base91payload);
-      Serial.println(base91payload);
+      Serial.print(base91payload);
       Serial.println(" :lora payload");
+      rp2040.wdt_reset();
       counter++;
     }
   }

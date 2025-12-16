@@ -5,26 +5,49 @@
 
 
 const char base91_chars[] =
-    "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+"!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~";
 
-String toBase91(BigNumber n) {
-  if (n == 0) return String(base91_chars[0]);
-  BigNumber base = 91;
-  String result = "";
 
-  while (n > 0) {
-    BigNumber quotient = n / base;
-    BigNumber remainder = n - quotient * base;  // manual modulo
 
-    // Convert remainder -> int safely via string
-    String rStr = remainder.toString();
-    int rem = rStr.toInt();  // guaranteed < 91
+void toBase91(BigNumber n, char* outBuf, size_t bufSize) {
+    if (n == 0) {
+        if (bufSize > 1) {
+            outBuf[0] = base91_chars[0];
+            outBuf[1] = '\0';
+        }
+        return;
+    }
 
-    result = String(base91_chars[rem]) + result;
-    n = quotient;
-  }
+    BigNumber base = 91;
+    char tempBuf[150]; // Temporary buffer for reversing
+    int index = 0;
 
-  return result;
+    // Generate digits (comes out in reverse order)
+    while (n > 0 && index < (int)sizeof(tempBuf) - 1) {
+        BigNumber quotient = n / base;
+        BigNumber remainder = n - (quotient * base);
+
+        // 1. Get the raw string pointer from BigNumber
+        char* rawStr = remainder.toString(); 
+
+        // 2. Convert to integer (remainder is always < 91, so atoi is safe)
+        int rem = atoi(rawStr); 
+
+        // 3. CRITICAL: Free the memory allocated by toString()
+        free(rawStr); 
+
+        tempBuf[index++] = base91_chars[rem];
+        n = quotient;
+    }
+
+    // Reverse into the output buffer
+    int outIdx = 0;
+    for (int i = index - 1; i >= 0; i--) {
+        if (outIdx < (int)bufSize - 1) {
+            outBuf[outIdx++] = tempBuf[i];
+        }
+    }
+    outBuf[outIdx] = '\0'; // Null terminate
 }
 
 /*
