@@ -1,30 +1,33 @@
-// encode_mixed_radix.h
-#ifndef ENCODE_MIXED_RADIX_H
-#define ENCODE_MIXED_RADIX_H
+#ifndef ENCODER_H
+#define ENCODER_H
 
 #include <BigNumber.h>
-#include <tuple>
-#include <vector>
+#include <Arduino.h>
 
-// Encodes a sequence of (digit, base) pairs into a single BigNumber
-// using mixed radix representation.
-//
-// Parameters:
-//   digits_and_bases - A vector of tuples, each containing a digit and its corresponding base.
-//
-// Returns:
-//   A BigNumber representing the encoded mixed-radix value.
 
-BigNumber encodeMixedRadix(const std::vector<std::tuple<uint16_t, uint16_t>>& digits_and_bases);
 
+
+// Define a simple structure for our mixed radix pairs
+struct RadixItem {
+    uint16_t value;
+    uint16_t base;
+};
+
+// Define how many items we have (6 items in your list)
+#define PAYLOAD_ITEMS 6
+
+
+BigNumber encodeMixedRadix(RadixItem* items, size_t count);
 String toBase91(BigNumber n);
 
+
 void MRencode_convert(float hdop, float alt, float speed_kmh, float course_deg,
-                      uint16_t batvoltage, uint16_t PVvoltage,
-                      uint16_t *enc_alt, uint16_t *enc_speed,
-                      uint16_t *enc_hdop, uint16_t *enc_bat, uint16_t *enc_pv);
+                        uint16_t PVvoltage, uint16_t *enc_alt, uint16_t *enc_speed,
+                        uint16_t *enc_hdop, uint16_t *enc_bat, uint16_t *enc_pv);
+
 
 void aprsFormatLat(float lat, char* buf, size_t bufSize);
 void aprsFormatLng(float lat, char* buf, size_t bufSize);
+
 
 #endif // ENCODE_MIXED_RADIX_H

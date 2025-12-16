@@ -13,7 +13,7 @@
 #include <encoder.h>
 #include <geofence.h>
 
-int batvoltage;
+
 int solarvoltage;
 int counter = 0;
 
@@ -39,16 +39,14 @@ char message2m[] = "placeholder";
 
 
 
-// structure (and bases) of the data that we feed into the mixed radix encoder, updated every gps read
-std::vector<std::tuple<uint16_t, uint16_t>> digits_and_bases = {
-    //{frequency, 1}, // 0 for vhf (2m), 1 for uhf (lora)
-    {enc_alt, 720},
-    {sats, 40},
-    {enc_speed, 62},
-    {enc_hdop, 270},
-    {enc_bat, 410},
-    {enc_pv, 410},
-    {counter, 1000}
+// initialize bases here. Values (0) are placeholders.
+RadixItem payloadData[PAYLOAD_ITEMS] = {
+    {0, 720},  // Alt
+    {0, 40},   // Sats
+    {0, 62},   // Speed
+    {0, 270},  // HDOP
+    {0, 410},  // PV
+    {0, 1000}  // Counter
 };
 
 char base91payload[150];
@@ -103,7 +101,6 @@ void loop() {
     lastTxTime = millis(); // Reset timer
 
     solarvoltage = analogRead(vsensesolar_pin);
-    batvoltage = analogRead(vsensebat_pin);
     int uptime = millis() / 1000;
 
     GEOFENCE_position(lat, lng);
@@ -111,9 +108,16 @@ void loop() {
     aprsFormatLat(lat, latitude, sizeof(latitude));
     aprsFormatLng(lng, longitude, sizeof(longitude));
 
-    MRencode_convert(hdop, alt, speed_kmh, course_deg, batvoltage, solarvoltage, &enc_alt, &enc_speed, &enc_hdop, &enc_bat, &enc_pv);
+    MRencode_convert(hdop, alt, speed_kmh, course_deg, solarvoltage, &enc_alt, &enc_speed, &enc_hdop, &enc_bat, &enc_pv);
 
-    BigNumber intpayload = encodeMixedRadix(digits_and_bases);
+    payloadData[0].value = enc_alt;
+    payloadData[1].value = sats;
+    payloadData[2].value = enc_speed;
+    payloadData[3].value = enc_hdop;
+    payloadData[4].value = enc_pv;
+    payloadData[5].value = counter;
+
+    BigNumber intpayload = encodeMixedRadix(payloadData, PAYLOAD_ITEMS);
 
     String tempPayload = toBase91(intpayload);
           
@@ -135,17 +139,6 @@ void loop() {
     Serial.print("Counter: "); Serial.println(counter);
     Serial.println();
     
-
-    std::vector<std::tuple<uint16_t, uint16_t>> digits_and_bases = {
-    //{frequency, 1}, // 0 for vhf (2m), 1 for uhf (lora)
-    {enc_alt, 720},
-    {sats, 40},
-    {enc_speed, 62},
-    {enc_hdop, 270},
-    {enc_bat, 410},
-    {enc_pv, 410},
-    {counter, 1000}
-    };
 
 
 

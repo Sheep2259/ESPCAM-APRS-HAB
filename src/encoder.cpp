@@ -1,11 +1,8 @@
 #include <BigNumber.h>
-#include <tuple>
-#include <vector>
-
+#include <encoder.h>
 
 // THIS IS ALL UNTESTED
 
-#include <BigNumber.h>
 
 const char base91_chars[] =
     "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~";
@@ -49,16 +46,20 @@ BigNumber fromBase91(const String &s) {
 
 
 
-
-
-BigNumber encodeMixedRadix(const std::vector<std::tuple<uint16_t, uint16_t>>& digits_and_bases)
-{
+BigNumber encodeMixedRadix(RadixItem* items, size_t count){
     BigNumber encoded = 0;
     BigNumber multiplier = 1;
 
-    for (const auto& [digit, base] : digits_and_bases)
+    for (size_t i = 0; i < count; i++)
     {
-        encoded += static_cast<BigNumber>(digit) * multiplier;
+        // Access fields directly from the struct
+        uint16_t digit = items[i].value;
+        uint16_t base  = items[i].base;
+
+        // Safety modulo
+        uint16_t safe_digit = digit % base;
+
+        encoded += static_cast<BigNumber>(safe_digit) * multiplier;
         multiplier *= static_cast<BigNumber>(base);
     }
 
@@ -77,14 +78,12 @@ uint16_t MRenc_alt = 65532, MRenc_speed = 65532, MRenc_hdop = 65532;
 
 */
 void MRencode_convert(float hdop, float alt, float speed_kmh, float course_deg,
-                      uint16_t batvoltage, uint16_t PVvoltage,
-                      uint16_t *enc_alt, uint16_t *enc_speed,
+                      uint16_t PVvoltage, uint16_t *enc_alt, uint16_t *enc_speed,
                       uint16_t *enc_hdop, uint16_t *enc_bat, uint16_t *enc_pv) {
 
   *enc_alt  = alt / 20;
   *enc_speed = speed_kmh / 2;
   *enc_hdop  = hdop * 10;
-  *enc_bat   = batvoltage / 10;
   *enc_pv    = PVvoltage / 10;
 
 }
