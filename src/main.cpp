@@ -4,7 +4,6 @@
 #include <radio.h>
 #include <rpi_defs.h>
 #include <TinyGPSPlus.h>
-#include <SoftwareSerial.h>
 #include <GPS.h>
 #include <globals.h>
 #include <BigNumber.h>
@@ -57,24 +56,23 @@ const unsigned long TX_INTERVAL = 5100; // 5.1 seconds
 
 void setup() {
   
-  rp2040.wdt_begin(8000); // watchdog helps prevent brownout states from sunrise
   delay(3000);
 
   Serial.begin(115200);
 
-  SPI.setRX(sxMISO_pin); // MISO
-  SPI.setTX(sxMOSI_pin); // MOSI
-  SPI.setSCK(sxSCK_pin); // SCK
-  SPI.setCS(sxCS_pin);   // CSn
-  SPI.begin();
+  //SPI.setRX(sxMISO_pin); // MISO
+  //SPI.setTX(sxMOSI_pin); // MOSI
+  //SPI.setSCK(sxSCK_pin); // SCK
+  //SPI.setCS(sxCS_pin);   // CSn
+  //SPI.begin();
 
   GEOFENCE_position(lat, lng);
 
   analogReadResolution(12);
   
-  Serial2.setRX(gpsRXPin); // Pin 5
-  Serial2.setTX(gpsTXPin); // Pin 4
-  Serial2.begin(GPSBaud);  // 9600
+  //Serial2.setRX(gpsRXPin); // Pin 5
+  //Serial2.txPin(gpsTXPin); // Pin 4
+  Serial1.begin(9600, SERIAL_8N1, gpsRXPin, gpsTXPin);  // 9600, 5, 4
 
   // debug Serial.println("serial1 init done");
   // debug delay(25);
@@ -146,7 +144,6 @@ void loop() {
       transmit_2m(callsign, destination, latitudechars, longitudechars, base91payload);
       Serial.print(base91payload);
       Serial.println(" :2m payload");
-      rp2040.wdt_reset();
       counter++;
     }
 
@@ -154,7 +151,6 @@ void loop() {
       transmit_lora(callsign, destination, latitudechars, longitudechars, base91payload);
       Serial.print(base91payload);
       Serial.println(" :lora payload");
-      rp2040.wdt_reset();
       counter++;
     }
   }
