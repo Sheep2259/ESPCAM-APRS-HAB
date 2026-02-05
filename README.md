@@ -1,7 +1,8 @@
-This code is for a rp2040 and sx1278 based superpressure picoballoon, 
-designed to test the coverage and reliability of the aprs network for upcoming balloons.
+This code is for a espcam and sx1278 based superpressure picoballoon, 
+designed to transmit images back to a computer over aprs and the internet
 It uses mixed radix and base 91 encoding to efficiently use the limited aprs payload.
 
+use raptorq fountain codes for images
 
 
 
@@ -26,7 +27,6 @@ packets in clusters, as in many consecutive transmission in a row to test large 
 
 aprs may have a comment message limit of 67 chars, although not certain
 i think aprs has a min 5s between packets
-so possibly test alternating callsign to bypass
 
 
 not in this code but need aprs tracker website
