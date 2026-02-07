@@ -1,4 +1,4 @@
-// Contains pin definitions for rpi 2040
+// Contains pin definitions for espcam
 #pragma once
 
 
@@ -12,10 +12,10 @@
 
 
 // sx1278 pin defs
-constexpr int sxSCK_pin = 2;  // 2, 6, 18, 22  } alternative pins
-constexpr int sxMOSI_pin = 3;     // 3, 7, 19, 23  } 
-constexpr int sxMISO_pin = 0;     // 0, 4, 16, 20  }
-constexpr int sxCS_pin = 1;       // 1, 5, 17, 21  }
+constexpr int sxSCK_pin = 2;
+constexpr int sxMOSI_pin = 3;
+constexpr int sxMISO_pin = 0;
+constexpr int sxCS_pin = 1;
 
 constexpr int sxNSS_pin = 13;
 constexpr int sxDIO0_pin = 14;
@@ -31,5 +31,4 @@ constexpr int gpsRXPin = 5;
 constexpr int  GPSBaud = 9600;
 
 // other pin defs
-constexpr int vsensesolar_pin = 28; // uses 0.5x voltage divider
-constexpr int vsensebat_pin = 29; // uses 0.5x voltage divider
+constexpr int vsensesolar_pin = 4; // uses 0.5x voltage divider

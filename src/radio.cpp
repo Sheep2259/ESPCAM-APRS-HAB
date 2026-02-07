@@ -1,7 +1,7 @@
 #include <RadioLib.h>
 #include <Arduino.h>
 #include <SPI.h>
-#include <rpi_defs.h>
+#include <pin_defs.h>
 #include <geofence.h>
 
   SX1278 radio = new Module(sxNSS_pin, sxDIO0_pin, sxRESET_pin, sxDIO1_pin);

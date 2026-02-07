@@ -1,8 +1,8 @@
 #include <RadioLib.h>
 #include <Arduino.h>
-#include <SPI.h>
-#include <radio.h>
-#include <rpi_defs.h>
+//#include <SPI.h>
+//#include <radio.h>
+#include <pin_defs.h>
 #include <TinyGPSPlus.h>
 #include <GPS.h>
 #include <globals.h>
@@ -48,7 +48,7 @@ RadixItem payloadData[PAYLOAD_ITEMS] = {
     {0, 1000}  // Counter
 };
 
-char base91payload[150];
+char base91payload[100];
 
 unsigned long lastTxTime = 0;
 const unsigned long TX_INTERVAL = 5100; // 5.1 seconds
@@ -69,12 +69,10 @@ void setup() {
   GEOFENCE_position(lat, lng);
 
   analogReadResolution(12);
-  
-  //Serial2.setRX(gpsRXPin); // Pin 5
-  //Serial2.txPin(gpsTXPin); // Pin 4
-  Serial1.begin(9600, SERIAL_8N1, gpsRXPin, gpsTXPin);  // 9600, 5, 4
 
-  // debug Serial.println("serial1 init done");
+  //Serial2.begin(9600, SERIAL_8N1, gpsRXPin, gpsTXPin);  // 9600, 5, 4
+
+  Serial.println("serial1 init done");
   // debug delay(25);
 
 
@@ -100,6 +98,7 @@ void loop() {
 
 
   if (millis() - lastTxTime >= TX_INTERVAL) {
+    Serial.print("homo");
     lastTxTime = millis(); // Reset timer
 
     solarvoltage = analogRead(vsensesolar_pin);
@@ -141,14 +140,14 @@ void loop() {
 
 
     if ( (counter % 2) == 0) { 
-      transmit_2m(callsign, destination, latitudechars, longitudechars, base91payload);
+      //transmit_2m(callsign, destination, latitudechars, longitudechars, base91payload);
       Serial.print(base91payload);
       Serial.println(" :2m payload");
       counter++;
     }
 
     else {
-      transmit_lora(callsign, destination, latitudechars, longitudechars, base91payload);
+      //transmit_lora(callsign, destination, latitudechars, longitudechars, base91payload);
       Serial.print(base91payload);
       Serial.println(" :lora payload");
       counter++;
