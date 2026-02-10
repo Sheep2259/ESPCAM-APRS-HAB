@@ -26,7 +26,6 @@ packets in clusters, as in many consecutive transmission in a row to test large 
 
 
 
-
 aprs may have a comment message limit of 67 chars, although not certain
 i think aprs has a min 5s between packets
 
