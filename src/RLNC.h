@@ -2,37 +2,31 @@
 #define TINY_RLNC_H
 
 #include <cstdint>
+#include <cstddef> // For size_t
 
-// Configuration
-#define RLNC_BLOCK_SIZE 50    // Bytes per source block
-#define RLNC_BLOCK_COUNT 1600 // Number of source blocks
+#define RLNC_BLOCK_SIZE 50
 
 class TinyRLNC {
 public:
     /**
-     * @brief Initialize the encoder.
-     * @param data_ptr Pointer to the flat buffer containing all source data.
-     * MUST be size: RLNC_BLOCK_COUNT * RLNC_BLOCK_SIZE (80KB).
-     * The class does not copy this data; it reads it directly.
+     * @brief Initialize with total byte size.
+     * @param data_ptr Pointer to source data.
+     * @param total_bytes Exact size of the file/data in bytes.
+     * * The class automatically calculates how many 50-byte blocks are needed.
+     * It handles padding internally (virtual zeros) if size isn't a multiple of 50.
      */
-    TinyRLNC(const uint8_t* data_ptr);
+    TinyRLNC(const uint8_t* data_ptr, size_t total_bytes);
 
-    /**
-     * @brief Encodes a single packet.
-     * @param seed A unique 32-bit integer (e.g., packet counter).
-     * @param out_buffer Pointer to a buffer of size RLNC_BLOCK_SIZE (50 bytes).
-     * The encoded payload will be written here.
-     */
     void encode(uint32_t seed, uint8_t* out_buffer);
 
 private:
     const uint8_t* _data_ptr;
+    size_t _total_bytes;
+    uint32_t _full_blocks;   // Number of blocks that are exactly 50 bytes
+    uint8_t _partial_bytes;  // Bytes in the final block (if any)
 
-    // Internal PRNG helper
     static uint32_t xorshift32(uint32_t& state);
-    
-    // Internal GF(2^8) helper using lookups
     static inline uint8_t gf_mul(uint8_t a, uint8_t b);
 };
 
-#endif // TINY_RLNC_H
+#endif
