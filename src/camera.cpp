@@ -1,8 +1,20 @@
 #include "esp32cam.h"
 #include "LittleFS.h"
-
+#include <Preferences.h>
 
 esp32cam::Resolution initialResolution;
+
+
+Preferences prefs;
+// savedImages array contains the remaining packets required for complete transmission
+// default is 0 for nonexistent images, when remaining packets are decremented to 0 it is safe to overwrite
+uint16_t savedImages[15];
+
+
+
+void syncToFlash() {
+  prefs.putBytes("counts", savedImages, sizeof(savedImages));
+}
 
 
 void cam_init() {
@@ -17,7 +29,7 @@ void cam_init() {
     cfg.setPins(pins::AiThinker);
     cfg.setResolution(initialResolution);
     cfg.setBufferCount(1);
-    cfg.setJpeg(65);
+    cfg.setJpeg(75);
 
     bool ok = Camera.begin(cfg);
     if (!ok) {
@@ -29,7 +41,7 @@ void cam_init() {
   }
 }
 
-void savePhoto() {
+void savePhoto(uint8_t quality) {
   // Capture the frame
   auto frame = esp32cam::capture(); // Returns std::unique_ptr<Frame>
 
@@ -38,23 +50,35 @@ void savePhoto() {
     return;
   }
 
-  Serial.printf("Captured: %d bytes. Saving to LittleFS...\n", frame->size());
+  uint8_t numberofimages = 0;
+  for (uint8_t i = 0; i < 16; i++) {
 
-  // Open a file for writing
-  // Note: "/photo.jpg" is the filename. Leading slash is mandatory.
-  File file = LittleFS.open("/photo.jpg", FILE_WRITE);
+    if (savedImages[i] = 0){
 
-  if (!file) {
-    Serial.println("Failed to open file for writing");
-    return;
+      // construct file name
+      char filename[12];
+      snprintf(filename, sizeof(filename), "/%d.jpg", i);
+
+      // Open a file for writing, "/i.jpg" is the filename.
+      // file name structure might be 0-7 for high quality and 8-15 for low quality)
+      File file = LittleFS.open(filename, FILE_WRITE);
+
+      if (!file) {
+        Serial.println("Failed to open file for writing");
+        return;
+      }
+
+      // Write the buffer to the file
+      // .data() gives the pointer, .size() gives the length
+      file.write(frame->data(), frame->size()); 
+      
+      // update savedimages packet remaining count and add a 10% extra, manual ceiling operation
+      savedImages[i] = (frame->size() + 49) / 50;
+
+      // Close the file to save changes
+      file.close();
+
+      return;
+    }
   }
-
-  // Write the buffer to the file
-  // .data() gives the pointer, .size() gives the length
-  file.write(frame->data(), frame->size()); 
-  
-  // Close the file to save changes
-  file.close();
-  
-  Serial.printf("Saved %s to flash successfully.\n", "/photo.jpg");
 }

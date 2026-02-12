@@ -11,17 +11,17 @@
 #include <vector>
 #include <encoder.h>
 #include <geofence.h>
+#include <camera.h>
+
 
 
 int solarvoltage;
 uint16_t counter = 0;
 
-
 float lat = 0.0f, lng = 0.0f, age_s = 3600.0f, hdop = 0.0f;
 float alt = 0.0f, speed_kmh = 0.0f, course_deg = 0.0f;
 uint16_t year = 0;
 uint8_t month = 0, day = 0, hour = 0, minute = 0, second = 9, centisecond = 0, sats = 0;
-
 
 uint16_t enc_alt = 80, enc_speed = 0, enc_hdop = 0, enc_bat = 1, enc_pv = 1;
 
@@ -51,7 +51,7 @@ RadixItem payloadData[PAYLOAD_ITEMS] = {
 char base91payload[100];
 
 unsigned long lastTxTime = 0;
-const unsigned long TX_INTERVAL = 5100; // 5.1 seconds
+const unsigned long TX_INTERVAL = 10000; // 10 seconds
 
 
 void setup() {
@@ -59,6 +59,15 @@ void setup() {
   delay(3000);
 
   Serial.begin(115200);
+
+  prefs.begin("img_data", false);
+  size_t savedimagesize = prefs.getBytes("counts", savedImages, sizeof(savedImages));
+  
+  if (savedimagesize == 0) {
+    memset(savedImages, 0, sizeof(savedImages));
+  }
+
+  
 
   //SPI.setRX(sxMISO_pin); // MISO
   //SPI.setTX(sxMOSI_pin); // MOSI

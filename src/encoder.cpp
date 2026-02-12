@@ -1,7 +1,7 @@
 #include <BigNumber.h>
 #include <encoder.h>
 
-// THIS IS ALL UNTESTED
+
 
 
 const char base91_chars[] =
