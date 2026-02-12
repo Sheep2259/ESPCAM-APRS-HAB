@@ -1,21 +1,15 @@
+#include "camera.h"
 #include "esp32cam.h"
 #include "LittleFS.h"
-#include <Preferences.h>
+
 
 esp32cam::Resolution initialResolution;
-
-
 Preferences prefs;
-// savedImages array contains the remaining packets required for complete transmission
-// default is 0 for nonexistent images, when remaining packets are decremented to 0 it is safe to overwrite
-uint16_t savedImages[15];
-
-
+uint16_t savedImages[16];
 
 void syncToFlash() {
   prefs.putBytes("counts", savedImages, sizeof(savedImages));
 }
-
 
 void cam_init() {
   esp32cam::setLogger(Serial);
@@ -50,17 +44,14 @@ void savePhoto(uint8_t quality) {
     return;
   }
 
-  uint8_t numberofimages = 0;
   for (uint8_t i = 0; i < 16; i++) {
 
-    if (savedImages[i] = 0){
+    if (savedImages[i] == 0) { 
 
       // construct file name
       char filename[12];
       snprintf(filename, sizeof(filename), "/%d.jpg", i);
 
-      // Open a file for writing, "/i.jpg" is the filename.
-      // file name structure might be 0-7 for high quality and 8-15 for low quality)
       File file = LittleFS.open(filename, FILE_WRITE);
 
       if (!file) {
@@ -68,15 +59,14 @@ void savePhoto(uint8_t quality) {
         return;
       }
 
-      // Write the buffer to the file
-      // .data() gives the pointer, .size() gives the length
       file.write(frame->data(), frame->size()); 
       
-      // update savedimages packet remaining count and add a 10% extra, manual ceiling operation
-      savedImages[i] = (frame->size() + 49) / 50;
+      // update savedimages packet remaining count
+      savedImages[i] = ceil((frame->size() * 1.1) / 50.0);
 
-      // Close the file to save changes
       file.close();
+
+      syncToFlash();
 
       return;
     }

@@ -67,8 +67,6 @@ void setup() {
     memset(savedImages, 0, sizeof(savedImages));
   }
 
-  
-
   //SPI.setRX(sxMISO_pin); // MISO
   //SPI.setTX(sxMOSI_pin); // MOSI
   //SPI.setSCK(sxSCK_pin); // SCK
@@ -81,18 +79,13 @@ void setup() {
 
   //Serial2.begin(9600, SERIAL_8N1, gpsRXPin, gpsTXPin);  // 9600, 5, 4
 
-  Serial.println("serial1 init done");
-  // debug delay(25);
-
-
   BigNumber::begin ();
 
+  cam_init();
 }
 
 
 void loop() {
-
-
 
 	while (Serial2.available() > 0) {
 		if (gps.encode(Serial2.read())) {
@@ -107,7 +100,7 @@ void loop() {
 
 
   if (millis() - lastTxTime >= TX_INTERVAL) {
-    Serial.print("homo");
+    Serial.print("tx");
     lastTxTime = millis(); // Reset timer
 
     solarvoltage = analogRead(vsensesolar_pin);
@@ -145,7 +138,6 @@ void loop() {
     Serial.print("Counter: "); Serial.println(counter);
     Serial.println();
     
-
 
 
     if ( (counter % 2) == 0) { 
