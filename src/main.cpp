@@ -54,9 +54,10 @@ unsigned long lastTxTime = 0;
 const unsigned long TX_INTERVAL = 10000; // 10 seconds
 
 unsigned long lastIMGTime = 0;
-const unsigned long IMG_interval  = 3600000; // 10 seconds
+const unsigned long IMG_interval  = 3600000; // 1 hour
 
-bool highqualityarea = 0;
+unsigned quality = 0;
+unsigned lastquality = 0;
 
 void setup() {
   
@@ -102,22 +103,32 @@ void loop() {
 		}
 	} 
 
-  if (lastIMGTime >= IMG_interval){
-    if (locationQuality(lat, lng)){
+  if ((millis() - lastIMGTime) >= IMG_interval){
+    // dont need to check for free image slot as it will be discarded if no slot available
+    if (quality == 1){
       savePhoto(1);
+      lastIMGTime = (millis() - (IMG_interval/2)); // wait half interval until next image
     }
-    savePhoto(0);
-    lastIMGTime = millis(); // Reset timer
+    else{
+      savePhoto(0);
+      lastIMGTime = millis(); // wait full interval until next image
+    }
+  }
+
+  if ((lastquality == 0) && (quality == 1)){
+    // when we enter a high quality area, take image
+    savePhoto(1);
+    lastIMGTime = (millis() - (IMG_interval/2)); // wait half interval until next image
   }
 
 
 
   if (millis() - lastTxTime >= TX_INTERVAL) {
-    Serial.print("tx");
 
     solarvoltage = analogRead(vsensesolar_pin);
     int uptime = millis() / 1000;
-
+    lastquality = quality;
+    quality = locationQuality(lat, lng);
     GEOFENCE_position(lat, lng);
           
     aprsFormatLat(lat, latitudechars, sizeof(latitudechars));
@@ -136,6 +147,7 @@ void loop() {
 
     toBase91(intpayload, base91payload, sizeof(base91payload));
 
+    /*
     Serial.print("Lat: "); Serial.println(lat, 6);
     Serial.print("Lng: "); Serial.println(lng, 6);
     Serial.print("Age (s): "); Serial.println(age_s, 2);
@@ -149,22 +161,25 @@ void loop() {
     Serial.print("HDOP: "); Serial.println(hdop, 2);
     Serial.print("Counter: "); Serial.println(counter);
     Serial.println();
-    
+    */
+
     lastTxTime = millis(); // Reset timer
 
-    if ( (counter % 2) == 0) { 
+    if ( (counter % 20) == 0) { 
       //transmit_2m(callsign, destination, latitudechars, longitudechars, base91payload);
       Serial.print(base91payload);
       Serial.println(" :2m payload");
       counter++;
     }
-
+    /*
     else {
       //transmit_lora(callsign, destination, latitudechars, longitudechars, base91payload);
       Serial.print(base91payload);
       Serial.println(" :lora payload");
       counter++;
+      
     }
+    */
   }
 }
 
