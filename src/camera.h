@@ -11,6 +11,6 @@ extern uint16_t savedImages[16];
 // Function prototypes
 void cam_init();
 void savePhoto(uint8_t quality);
-void syncToFlash();
+void updateRemaining();
 
 #endif

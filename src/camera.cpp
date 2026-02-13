@@ -5,11 +5,16 @@
 
 esp32cam::Resolution initialResolution;
 Preferences prefs;
+
+// savedImages array contains the remaining packets required for complete transmission
+// default is 0 for nonexistent images, when remaining packets are decremented to 0 it is safe to overwrite
 uint16_t savedImages[16];
 
-void syncToFlash() {
+
+void updateRemaining() {
   prefs.putBytes("counts", savedImages, sizeof(savedImages));
 }
+
 
 void cam_init() {
   esp32cam::setLogger(Serial);
@@ -35,6 +40,7 @@ void cam_init() {
   }
 }
 
+
 void savePhoto(uint8_t quality) {
   // Capture the frame
   auto frame = esp32cam::capture(); // Returns std::unique_ptr<Frame>
@@ -44,14 +50,20 @@ void savePhoto(uint8_t quality) {
     return;
   }
 
-  for (uint8_t i = 0; i < 16; i++) {
+  // determine index range based on quality
+  // if quality is 1 (high): range 0-7
+  // if quality is 0 (low): range 8-15
+  uint8_t startIdx = (quality == 1) ? 0 : 8;
+  uint8_t endIdx = (quality == 1) ? 8 : 16;
+
+  for (uint8_t i = startIdx; i < endIdx; i++) {
 
     if (savedImages[i] == 0) { 
 
       // construct file name
       char filename[12];
       snprintf(filename, sizeof(filename), "/%d.jpg", i);
-
+      
       File file = LittleFS.open(filename, FILE_WRITE);
 
       if (!file) {
@@ -66,9 +78,10 @@ void savePhoto(uint8_t quality) {
 
       file.close();
 
-      syncToFlash();
+      updateRemaining();
 
       return;
     }
   }
 }
+

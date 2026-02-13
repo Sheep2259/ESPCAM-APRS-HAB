@@ -12,7 +12,7 @@
 #include <encoder.h>
 #include <geofence.h>
 #include <camera.h>
-
+#include <quality.h>
 
 
 int solarvoltage;
@@ -53,6 +53,10 @@ char base91payload[100];
 unsigned long lastTxTime = 0;
 const unsigned long TX_INTERVAL = 10000; // 10 seconds
 
+unsigned long lastIMGTime = 0;
+const unsigned long IMG_interval  = 3600000; // 10 seconds
+
+bool highqualityarea = 0;
 
 void setup() {
   
@@ -98,10 +102,18 @@ void loop() {
 		}
 	} 
 
+  if (lastIMGTime >= IMG_interval){
+    if (locationQuality(lat, lng)){
+      savePhoto(1);
+    }
+    savePhoto(0);
+    lastIMGTime = millis(); // Reset timer
+  }
+
+
 
   if (millis() - lastTxTime >= TX_INTERVAL) {
     Serial.print("tx");
-    lastTxTime = millis(); // Reset timer
 
     solarvoltage = analogRead(vsensesolar_pin);
     int uptime = millis() / 1000;
@@ -138,7 +150,7 @@ void loop() {
     Serial.print("Counter: "); Serial.println(counter);
     Serial.println();
     
-
+    lastTxTime = millis(); // Reset timer
 
     if ( (counter % 2) == 0) { 
       //transmit_2m(callsign, destination, latitudechars, longitudechars, base91payload);
