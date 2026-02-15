@@ -12,5 +12,6 @@ extern uint16_t savedImages[16];
 void cam_init();
 void savePhoto(uint8_t quality);
 void updateRemaining();
+int IMGnToTX(uint16_t savedImages[]);
 
 #endif

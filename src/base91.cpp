@@ -1,6 +1,7 @@
 #include <BigNumber.h>
-#include <encoder.h>
-
+#include <base91.h>
+#include <cstdio>
+#include <cstring>
 
 
 
@@ -8,7 +9,7 @@ const char base91_chars[] =
 "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~";
 
 
-
+// function that encodes an integer to base91
 void toBase91(BigNumber n, char* outBuf, size_t bufSize) {
     if (n == 0) {
         if (bufSize > 1) {
@@ -49,6 +50,45 @@ void toBase91(BigNumber n, char* outBuf, size_t bufSize) {
     }
     outBuf[outIdx] = '\0'; // Null terminate
 }
+
+// function that encodes an array of bytes to base91
+void encodeBase91(const uint8_t* data, size_t len, char* output) {
+  size_t out_idx = 0;
+  unsigned long queue = 0;
+  int nbits = 0;
+
+  for (size_t i = 0; i < len; i++) {
+    queue |= (unsigned long)data[i] << nbits;
+    nbits += 8;
+
+    while (nbits > 13) {
+      unsigned int val = queue & 8191; 
+
+      if (val > 88) {
+        queue >>= 13;
+        nbits -= 13;
+      } else {
+        val = queue & 16383;
+        queue >>= 14;
+        nbits -= 14;
+      }
+      
+      output[out_idx++] = base91_chars[val % 91];
+      output[out_idx++] = base91_chars[val / 91];
+    }
+  }
+
+  if (nbits > 0) {
+    output[out_idx++] = base91_chars[queue % 91];
+    if (nbits > 7 || queue > 90) {
+      output[out_idx++] = base91_chars[queue / 91];
+    }
+  }
+
+  // add terminator (T-800 model)
+  output[out_idx] = '\0'; 
+}
+
 
 /*
 BigNumber fromBase91(const String &s) {
@@ -132,4 +172,46 @@ void aprsFormatLng(float lon, char* buf, size_t bufSize) {
   int wholeMin = int(min);
   int frac = int((min - wholeMin) * 100 + 0.5f);
   snprintf(buf, bufSize, "%03d%02d.%02d%c", deg, wholeMin, frac, hemi);
+}
+
+
+
+float truncParseLat(const char* buf) {
+    int deg;
+    float min;
+    char hemi;
+
+    // Parse: 2 digits for degrees, float for minutes, char for hemisphere
+    // Example: "5130.50N" -> deg=51, min=30.50, hemi='N'
+    if (sscanf(buf, "%2d%f%c", &deg, &min, &hemi) < 3) {
+        return 0.0f; // Error handling
+    }
+
+    float lat = (float)deg + (min / 60.0f);
+
+    if (hemi == 'S') {
+        lat = -lat;
+    }
+
+    return lat;
+}
+
+float truncParseLng(const char* buf) {
+    int deg;
+    float min;
+    char hemi;
+
+    // Parse: 3 digits for degrees, float for minutes, char for hemisphere
+    // Example: "00005.12W" -> deg=0, min=5.12, hemi='W'
+    if (sscanf(buf, "%3d%f%c", &deg, &min, &hemi) < 3) {
+        return 0.0f; // Error handling
+    }
+
+    float lon = (float)deg + (min / 60.0f);
+
+    if (hemi == 'W') {
+        lon = -lon;
+    }
+
+    return lon;
 }

@@ -1,5 +1,5 @@
-#ifndef TINY_RLNC_TABLES_H
-#define TINY_RLNC_TABLES_H
+#ifndef LEC_tables_H
+#define LEC_tables_H
 
 #include <cstdint>
 
