@@ -29,7 +29,6 @@ uint16_t enc_alt = 80, enc_speed = 0, enc_hdop = 0, enc_bat = 1, enc_pv = 1;
 
 // default aprs packet, variables change when we have more data like gps
 char callsign[] = "M7CWV";
-char loracallsign[] = "M7CWV-4";
 char destination[] = "APRS";
 char latitudechars[] = "0000.00N";
 char longitudechars[] = "00000.00E";
@@ -90,6 +89,10 @@ void setup() {
   //Serial2.begin(9600, SERIAL_8N1, gpsRXPin, gpsTXPin);  // 9600, 5, 4
 
   BigNumber::begin ();
+
+  if(!LittleFS.begin(true)){
+        return;
+  }
 
   cam_init();
 }
@@ -229,7 +232,7 @@ void loop() {
         transmit_2m(callsign, destination, latitudechars, longitudechars, outputBuffer);
 
         if (receptionlocation(lat, lng)){
-          savedImages[filenum]--;
+          savedImages[filenum]--; // if pretty sure packet recieved decrement remaining for that image
         }
 
         counter++;

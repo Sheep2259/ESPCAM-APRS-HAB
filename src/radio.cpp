@@ -53,8 +53,8 @@ void transmit_lora(char callsign[], char destination[], char latitude[], char lo
   // initialize APRS client
   // symbol:                      '>' (car)
   // callsign                     "N7CWV"
-  // SSID                         1
-  int loraaprsstate = loraaprs.begin('>', callsign, 1);
+  // SSID                         4
+  int loraaprsstate = loraaprs.begin('>', callsign, 4);
 
   // SSID is set to 1, as APRS over LoRa uses WIDE1-1 path by default
   int state = loraaprs.sendPosition(destination, 1, latitude, longitude, message);

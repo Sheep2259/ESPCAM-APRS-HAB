@@ -25,8 +25,8 @@ constexpr int sxDIO2_pin = 27;
 
 
 // gps pin defs
-constexpr int gpsTXPin = 4;
-constexpr int gpsRXPin = 5;
+constexpr int gpsTXPin = 12;
+constexpr int gpsRXPin = 13;
 
 constexpr int  GPSBaud = 9600;
 
