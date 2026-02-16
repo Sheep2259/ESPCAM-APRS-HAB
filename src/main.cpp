@@ -29,6 +29,7 @@ uint16_t enc_alt = 80, enc_speed = 0, enc_hdop = 0, enc_bat = 1, enc_pv = 1;
 
 // default aprs packet, variables change when we have more data like gps
 char callsign[] = "M7CWV";
+char loracallsign[] = "M7CWV-4";
 char destination[] = "APRS";
 char latitudechars[] = "0000.00N";
 char longitudechars[] = "00000.00E";
@@ -106,6 +107,12 @@ void loop() {
             
 		}
 	} 
+
+  RXfinishedimages(savedImages); // recieve finished image packets and update remaining packets (if recieved)
+
+  if ((counter % 100) == 0){
+    updateRemaining();
+  }
 
   if ((millis() - lastIMGTime) >= IMG_interval){
     // dont need to check for free image slot as it will be discarded if no slot available
@@ -187,8 +194,6 @@ void loop() {
       }
     }
 
-
-
     else {
       //transmit image packet
 
@@ -222,6 +227,10 @@ void loop() {
 
         lastTxTime = millis(); // Reset timer
         transmit_2m(callsign, destination, latitudechars, longitudechars, outputBuffer);
+
+        if (receptionlocation(lat, lng)){
+          savedImages[filenum]--;
+        }
 
         counter++;
       }
