@@ -10,10 +10,8 @@ Preferences prefs;
 // default is 0 for nonexistent images, when remaining packets are decremented to 0 it is safe to overwrite
 uint16_t savedImages[16];
 
+uint8_t imageVersion[16];
 
-void updateRemaining() {
-  prefs.putBytes("counts", savedImages, sizeof(savedImages));
-}
 
 
 void cam_init() {
@@ -41,7 +39,7 @@ void cam_init() {
 }
 
 // take image with metadata
-void savePhoto(uint8_t quality, double lat, double lng, const char* timeStr) {
+void savePhoto(uint8_t quality, double lat, double lng, float alt, const char* timeStr) {
   
   auto frame = esp32cam::capture(); 
 
@@ -70,18 +68,20 @@ void savePhoto(uint8_t quality, double lat, double lng, const char* timeStr) {
       // Write the image data first
       file.write(frame->data(), frame->size()); 
       
-      // 2. Append metadata to the end of the file
+      // Append metadata to the end of the file
       // Using a delimiter (e.g., ||META:) makes parsing easier later
-      file.printf("||META:T=%s,LT=%.6f,LN=%.6f", timeStr, lat, lng);
+      file.printf("||META:T=%s,LT=%.6f,LN=%.6f,A=%.0f", timeStr, lat, lng, alt);
 
-      // 3. Update savedImages count based on total FILE size, not just frame size
-      // This ensures the transmission logic includes the metadata bytes
+      // update savedImages count based on total FILE size, not just frame size
       size_t finalSize = file.size(); 
-      savedImages[i] = ceil((finalSize * 1.1) / 50.0);
+      savedImages[i] = ceil((finalSize * 1.1) / 50.0); // 1.1x packets should be transmitted for redundancy
 
       file.close();
 
-      updateRemaining();
+      imageVersion[i]++;
+      
+      prefs.putBytes("version", imageVersion, sizeof(imageVersion));
+      prefs.putBytes("remain", savedImages, sizeof(savedImages));
 
       return;
     }

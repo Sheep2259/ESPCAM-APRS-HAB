@@ -6,9 +6,6 @@
 #include <TinyGPSPlus.h>
 #include <GPS.h>
 #include <globals.h>
-#include <BigNumber.h>
-#include <tuple>
-#include <vector>
 #include <base91.h>
 #include <geofence.h>
 #include <camera.h>
@@ -63,8 +60,8 @@ unsigned lastquality = 0;
 
 char telemmsg[68];
 
-uint8_t packetData[53];
-LinearErasureCoder coder(52); // 52 byte packets
+uint8_t packetData[54];
+LinearErasureCoder coder(53); // 53 byte packets
 
 char timestampchars[30];
 
@@ -76,10 +73,16 @@ void setup() {
   Serial.begin(115200);
 
   prefs.begin("img_data", false);
-  size_t savedimagesize = prefs.getBytes("counts", savedImages, sizeof(savedImages));
+  size_t savedimagesize = prefs.getBytes("remain", savedImages, sizeof(savedImages));
   
   if (savedimagesize == 0) {
     memset(savedImages, 0, sizeof(savedImages));
+  }
+
+  size_t versionSize = prefs.getBytes("version", imageVersion, sizeof(imageVersion));
+
+  if (versionSize == 0) {
+    memset(imageVersion, 0, sizeof(imageVersion));
   }
 
   //SPI.setRX(sxMISO_pin); // MISO
@@ -93,8 +96,6 @@ void setup() {
   analogReadResolution(12);
 
   //Serial2.begin(9600, SERIAL_8N1, gpsRXPin, gpsTXPin);  // 9600, 5, 4
-
-  BigNumber::begin ();
 
   if(!LittleFS.begin(true)){
         return;
@@ -119,8 +120,8 @@ void loop() {
 
   RXfinishedimages(savedImages); // recieve finished image packets and update remaining packets (if recieved)
 
-  if ((millis() - updateprefs) > lastprefsupdatetime){
-    updateRemaining();
+  if ((millis() - lastprefsupdatetime) >= updateprefs){
+    prefs.putBytes("remain", savedImages, sizeof(savedImages));
     lastprefsupdatetime = millis();
   }
 
@@ -129,11 +130,11 @@ void loop() {
     snprintf(timestampchars, sizeof(timestampchars), "%d/%d/%d/%d/%d", month, day, hour, minute, second);
 
     if (quality == 1){
-      savePhoto(1, lat, lng, timestampchars);
+      savePhoto(1, lat, lng, alt, timestampchars);
       lastIMGTime = (millis() - (IMG_interval/2)); // wait half interval until next image
     }
     else{
-      savePhoto(0, lat, lng, timestampchars);
+      savePhoto(0, lat, lng, alt, timestampchars);
       lastIMGTime = millis(); // wait full interval until next image
     }
   }
@@ -141,7 +142,7 @@ void loop() {
   if ((lastquality == 0) && (quality == 1)){
     // when we enter a high quality area, take image
     snprintf(timestampchars, sizeof(timestampchars), "%d/%d/%d/%d/%d", month, day, hour, minute, second);
-    savePhoto(1, lat, lng, timestampchars);
+    savePhoto(1, lat, lng, alt, timestampchars);
     lastquality = 1; // so that it doesnt keep taking images
     lastIMGTime = (millis() - (IMG_interval/2)); // wait half interval until next image
   }
@@ -164,7 +165,9 @@ void loop() {
     if ((counter % telempacketinterval) == 0){
       solarvoltage = analogRead(vsensesolar_pin);
 
-      snprintf(telemmsg, sizeof(telemmsg), "T:%d/%d/%d/%d/%dP:%.0f/%.0f/%d/%.1f", month, day, hour, minute, second, alt, speed_kmh, sats, hdop);
+      snprintf(telemmsg, sizeof(telemmsg), "T:%d/%d/%d/%d/%dP:%.0f/%.0f/%d/%.1fS:%d/%d", 
+        month, day, hour, minute, second, alt, speed_kmh, sats, hdop, solarvoltage, counter); // about 47 chars used
+
       lastTxTime = millis(); // Reset timer
 
       if ((counter % (telempacketinterval * 2)) == 0) { // do half and half 2m/lora for telem packets
@@ -193,9 +196,10 @@ void loop() {
       uint8_t identifier = 0; 
 
       uint32_t raw_random = esp_random();
-      // Mask with 0xF0 (binary 11110000) to keep only the higher 4 bits
-      identifier = raw_random & 0xF0;
-      identifier += filenum;
+      // Mask with 0xF0 (binary 11000000) to keep only the higher 2 bits
+      identifier = raw_random & 0xC0;
+      identifier += (imageVersion[filenum] & 0x03) * 16; // take 2 least significant bits and put them in positions 00110000
+      identifier += filenum; // 0-15, so 00001111
 
       float trunclat = truncParseLat(latitudechars); // returns lat/lng in precision aprs encodes it in,
       float trunclon = truncParseLng(longitudechars); // for prng seed so reciever can reconstruct

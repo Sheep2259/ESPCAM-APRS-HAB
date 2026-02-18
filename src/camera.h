@@ -7,11 +7,11 @@
 // Declare globals as extern (tells main.cpp they exist in camera.cpp)
 extern Preferences prefs;
 extern uint16_t savedImages[16];
+extern uint8_t imageVersion[16];
 
 // Function prototypes
 void cam_init();
-void savePhoto(uint8_t quality, double lat, double lng, const char* timeStr);
-void updateRemaining();
+void savePhoto(uint8_t quality, double lat, double lng, float alt, const char* timeStr);
 int IMGnToTX(uint16_t savedImages[]);
 
 #endif
