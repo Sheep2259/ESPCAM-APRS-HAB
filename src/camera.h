@@ -10,7 +10,7 @@ extern uint16_t savedImages[16];
 
 // Function prototypes
 void cam_init();
-void savePhoto(uint8_t quality);
+void savePhoto(uint8_t quality, double lat, double lng, const char* timeStr);
 void updateRemaining();
 int IMGnToTX(uint16_t savedImages[]);
 

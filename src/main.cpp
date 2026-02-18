@@ -15,6 +15,23 @@
 #include <quality.h>
 #include <LinearErasureCoder.h>
 
+
+
+// send a telemetry packet every x packets (alternating lora and 2m)
+const unsigned telempacketinterval = 20;
+
+// send a packet every 10 seconds (10000ms)
+const unsigned long TX_INTERVAL = 10000;
+
+// take and store an image every 1 hour (3600000ms)
+const unsigned long IMG_interval  = 3600000;
+
+// sync remaining packets to preferences (flash) every 10 mins
+const unsigned updateprefs = 600000;
+
+
+
+
 int solarvoltage;
 uint32_t counter = 0;
 
@@ -24,7 +41,6 @@ uint16_t year = 0;
 uint8_t month = 0, day = 0, hour = 0, minute = 0, second = 9, centisecond = 0, sats = 0;
 
 uint16_t enc_alt = 80, enc_speed = 0, enc_hdop = 0, enc_bat = 1, enc_pv = 1;
-
 
 
 // default aprs packet, variables change when we have more data like gps
@@ -38,29 +54,19 @@ char message2m[] = "placeholder";
 
 
 
-// initialize bases here. Values (0) are placeholders.
-RadixItem payloadData[PAYLOAD_ITEMS] = {
-    {0, 720},  // encoded Alt
-    {0, 40},   // Sats
-    {0, 62},   // encoded Speed
-    {0, 270},  // encoded HDOP
-    {0, 410},  // encoded PV
-    {0, 1000}  // Counter
-};
-
-char base91payload[100];
-
 unsigned long lastTxTime = 0;
-const unsigned long TX_INTERVAL = 10000; // 10 seconds
-
 unsigned long lastIMGTime = 0;
-const unsigned long IMG_interval  = 3600000; // 1 hour
+unsigned long lastprefsupdatetime = 0;
 
 unsigned quality = 0;
 unsigned lastquality = 0;
 
+char telemmsg[68];
+
 uint8_t packetData[53];
 LinearErasureCoder coder(52); // 52 byte packets
+
+char timestampchars[30];
 
 
 void setup() {
@@ -113,25 +119,29 @@ void loop() {
 
   RXfinishedimages(savedImages); // recieve finished image packets and update remaining packets (if recieved)
 
-  if ((counter % 100) == 0){
+  if ((millis() - updateprefs) > lastprefsupdatetime){
     updateRemaining();
+    lastprefsupdatetime = millis();
   }
 
   if ((millis() - lastIMGTime) >= IMG_interval){
     // dont need to check for free image slot as it will be discarded if no slot available
+    snprintf(timestampchars, sizeof(timestampchars), "%d/%d/%d/%d/%d", month, day, hour, minute, second);
+
     if (quality == 1){
-      savePhoto(1);
+      savePhoto(1, lat, lng, timestampchars);
       lastIMGTime = (millis() - (IMG_interval/2)); // wait half interval until next image
     }
     else{
-      savePhoto(0);
+      savePhoto(0, lat, lng, timestampchars);
       lastIMGTime = millis(); // wait full interval until next image
     }
   }
 
   if ((lastquality == 0) && (quality == 1)){
     // when we enter a high quality area, take image
-    savePhoto(1);
+    snprintf(timestampchars, sizeof(timestampchars), "%d/%d/%d/%d/%d", month, day, hour, minute, second);
+    savePhoto(1, lat, lng, timestampchars);
     lastquality = 1; // so that it doesnt keep taking images
     lastIMGTime = (millis() - (IMG_interval/2)); // wait half interval until next image
   }
@@ -141,56 +151,31 @@ void loop() {
 
   if (millis() - lastTxTime >= TX_INTERVAL) {
 
-    if ((counter % 20) == 0){
+
+    aprsFormatLat(lat, latitudechars, sizeof(latitudechars));
+    aprsFormatLng(lng, longitudechars, sizeof(longitudechars));
+    lastquality = quality;
+    quality = locationQuality(lat, lng);
+    GEOFENCE_position(lat, lng);
+
+
+
+
+    if ((counter % telempacketinterval) == 0){
       solarvoltage = analogRead(vsensesolar_pin);
-      int uptime = millis() / 1000;
-      lastquality = quality;
-      quality = locationQuality(lat, lng);
-      GEOFENCE_position(lat, lng);
-            
-      aprsFormatLat(lat, latitudechars, sizeof(latitudechars));
-      aprsFormatLng(lng, longitudechars, sizeof(longitudechars));
 
-      MRencode_convert(hdop, alt, speed_kmh, course_deg, solarvoltage, &enc_alt, &enc_speed, &enc_hdop, &enc_bat, &enc_pv);
-
-      payloadData[0].value = enc_alt;
-      payloadData[1].value = sats;
-      payloadData[2].value = enc_speed;
-      payloadData[3].value = enc_hdop;
-      payloadData[4].value = enc_pv;
-      payloadData[5].value = counter;
-
-      BigNumber intpayload = encodeMixedRadix(payloadData, PAYLOAD_ITEMS);
-
-      toBase91(intpayload, base91payload, sizeof(base91payload));
-
-      /*
-      Serial.print("Lat: "); Serial.println(lat, 6);
-      Serial.print("Lng: "); Serial.println(lng, 6);
-      Serial.print("Age (s): "); Serial.println(age_s, 2);
-      Serial.print("Date: "); Serial.print(day); Serial.print("/"); Serial.print(month); Serial.print("/"); Serial.println(year);
-      Serial.print("Time (UTC): ");
-      Serial.print(hour); Serial.print(":"); Serial.print(minute); Serial.print(":"); Serial.println(second);
-      Serial.print("Alt (m): "); Serial.println(alt, 2);
-      Serial.print("Speed (km/h): "); Serial.println(speed_kmh, 2);
-      Serial.print("Course (deg): "); Serial.println(course_deg, 2);
-      Serial.print("Satellites: "); Serial.println(sats);
-      Serial.print("HDOP: "); Serial.println(hdop, 2);
-      Serial.print("Counter: "); Serial.println(counter);
-      Serial.println();
-      */
-
+      snprintf(telemmsg, sizeof(telemmsg), "T:%d/%d/%d/%d/%dP:%.0f/%.0f/%d/%.1f", month, day, hour, minute, second, alt, speed_kmh, sats, hdop);
       lastTxTime = millis(); // Reset timer
 
-      if ((counter % 40) == 0) { 
-        transmit_2m(callsign, destination, latitudechars, longitudechars, base91payload);
-        Serial.print(base91payload);
+      if ((counter % (telempacketinterval * 2)) == 0) { // do half and half 2m/lora for telem packets
+        transmit_2m(callsign, destination, latitudechars, longitudechars, telemmsg);
+        Serial.print(telemmsg);
         Serial.println(" :2m payload");
         counter++;
-      } // do half and half 2m/lora for telem packets
+      } 
       else {
-        transmit_lora(callsign, destination, latitudechars, longitudechars, base91payload);
-        Serial.print(base91payload);
+        transmit_lora(callsign, destination, latitudechars, longitudechars, telemmsg);
+        Serial.print(telemmsg);
         Serial.println(" :lora payload");
         counter++;
       
@@ -204,16 +189,13 @@ void loop() {
       if (filenum == -1){
           return;
       }
-      // 4 least significant bits image number, 4 most is random to create prng seed variability when not moving
+      // 4 least significant bits is image number, 4 most is random to create prng seed variability when not moving
       uint8_t identifier = 0; 
 
       uint32_t raw_random = esp_random();
       // Mask with 0xF0 (binary 11110000) to keep only the higher 4 bits
       identifier = raw_random & 0xF0;
       identifier += filenum;
-
-      aprsFormatLat(lat, latitudechars, sizeof(latitudechars));
-      aprsFormatLng(lng, longitudechars, sizeof(longitudechars));
 
       float trunclat = truncParseLat(latitudechars); // returns lat/lng in precision aprs encodes it in,
       float trunclon = truncParseLng(longitudechars); // for prng seed so reciever can reconstruct
@@ -232,7 +214,7 @@ void loop() {
         transmit_2m(callsign, destination, latitudechars, longitudechars, outputBuffer);
 
         if (receptionlocation(lat, lng)){
-          savedImages[filenum]--; // if pretty sure packet recieved decrement remaining for that image
+          savedImages[filenum]--; // if pretty sure packet recieved, decrement remaining for that image (mostly a fallback from rx packets)
         }
 
         counter++;

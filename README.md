@@ -6,6 +6,6 @@ use LNC erasure codes for images
 
 need to add some metadata at the end of the image when it is captured
 
-wspr functions in radio.cpp possibly
-
 not in this code but need aprs tracker website
+
+

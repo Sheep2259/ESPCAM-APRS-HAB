@@ -16,12 +16,85 @@ void updateRemaining() {
 }
 
 
+void cam_init() {
+  esp32cam::setLogger(Serial);
+
+  {
+    using namespace esp32cam;
+
+    initialResolution = Resolution::find(1600, 1200);
+
+    Config cfg;
+    cfg.setPins(pins::AiThinker);
+    cfg.setResolution(initialResolution);
+    cfg.setBufferCount(1);
+    cfg.setJpeg(75);
+
+    bool ok = Camera.begin(cfg);
+    if (!ok) {
+      Serial.println("camera initialize failure");
+      delay(5000);
+      ESP.restart();
+    }
+    Serial.println("camera initialize success");
+  }
+}
+
+// take image with metadata
+void savePhoto(uint8_t quality, double lat, double lng, const char* timeStr) {
+  
+  auto frame = esp32cam::capture(); 
+
+  if (frame == nullptr) {
+    Serial.println("Capture failed");
+    return;
+  }
+
+  uint8_t startIdx = (quality == 1) ? 0 : 8;
+  uint8_t endIdx = (quality == 1) ? 8 : 16;
+
+  for (uint8_t i = startIdx; i < endIdx; i++) {
+
+    if (savedImages[i] == 0) { 
+
+      char filename[12];
+      snprintf(filename, sizeof(filename), "/%d.jpg", i);
+      
+      File file = LittleFS.open(filename, FILE_WRITE);
+
+      if (!file) {
+        Serial.println("Failed to open file for writing");
+        return;
+      }
+
+      // Write the image data first
+      file.write(frame->data(), frame->size()); 
+      
+      // 2. Append metadata to the end of the file
+      // Using a delimiter (e.g., ||META:) makes parsing easier later
+      file.printf("||META:T=%s,LT=%.6f,LN=%.6f", timeStr, lat, lng);
+
+      // 3. Update savedImages count based on total FILE size, not just frame size
+      // This ensures the transmission logic includes the metadata bytes
+      size_t finalSize = file.size(); 
+      savedImages[i] = ceil((finalSize * 1.1) / 50.0);
+
+      file.close();
+
+      updateRemaining();
+
+      return;
+    }
+  }
+}
+
+
 // Returns an index (0-15) from savedImages based on weighted rank logic.
 // Returns -1 if all images are 0.
 int IMGnToTX(uint16_t savedImages[]) {
   float g = 0.01;
 
-  // 1. Determine the initial range: 0 for (0-7), 1 for (8-15)
+  // 1. Determine the initial range: 0 for (0-7), 1 for (8-15) (TRNG i believe)
   int rangeSelect = random(0, 2);
   
   // Struct to hold index and value for sorting
@@ -96,74 +169,3 @@ int IMGnToTX(uint16_t savedImages[]) {
   // Fallback (in case of floating point rounding errors)
   return validItems[count - 1].index;
 }
-
-
-void cam_init() {
-  esp32cam::setLogger(Serial);
-
-  {
-    using namespace esp32cam;
-
-    initialResolution = Resolution::find(1600, 1200);
-
-    Config cfg;
-    cfg.setPins(pins::AiThinker);
-    cfg.setResolution(initialResolution);
-    cfg.setBufferCount(1);
-    cfg.setJpeg(75);
-
-    bool ok = Camera.begin(cfg);
-    if (!ok) {
-      Serial.println("camera initialize failure");
-      delay(5000);
-      ESP.restart();
-    }
-    Serial.println("camera initialize success");
-  }
-}
-
-
-void savePhoto(uint8_t quality) {
-  // Capture the frame
-  auto frame = esp32cam::capture(); // Returns std::unique_ptr<Frame>
-
-  if (frame == nullptr) {
-    Serial.println("Capture failed");
-    return;
-  }
-
-  // determine index range based on quality
-  // if quality is 1 (high): range 0-7
-  // if quality is 0 (low): range 8-15
-  uint8_t startIdx = (quality == 1) ? 0 : 8;
-  uint8_t endIdx = (quality == 1) ? 8 : 16;
-
-  for (uint8_t i = startIdx; i < endIdx; i++) {
-
-    if (savedImages[i] == 0) { 
-
-      // construct file name
-      char filename[12];
-      snprintf(filename, sizeof(filename), "/%d.jpg", i);
-      
-      File file = LittleFS.open(filename, FILE_WRITE);
-
-      if (!file) {
-        Serial.println("Failed to open file for writing");
-        return;
-      }
-
-      file.write(frame->data(), frame->size()); 
-      
-      // update savedimages packet remaining count
-      savedImages[i] = ceil((frame->size() * 1.1) / 50.0);
-
-      file.close();
-
-      updateRemaining();
-
-      return;
-    }
-  }
-}
-

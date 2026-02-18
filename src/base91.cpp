@@ -9,47 +9,7 @@ const char base91_chars[] =
 "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~";
 
 
-// function that encodes an integer to base91
-void toBase91(BigNumber n, char* outBuf, size_t bufSize) {
-    if (n == 0) {
-        if (bufSize > 1) {
-            outBuf[0] = base91_chars[0];
-            outBuf[1] = '\0';
-        }
-        return;
-    }
 
-    BigNumber base = 91;
-    char tempBuf[150]; // Temporary buffer for reversing
-    int index = 0;
-
-    // Generate digits (comes out in reverse order)
-    while (n > 0 && index < (int)sizeof(tempBuf) - 1) {
-        BigNumber quotient = n / base;
-        BigNumber remainder = n - (quotient * base);
-
-        // 1. Get the raw string pointer from BigNumber
-        char* rawStr = remainder.toString(); 
-
-        // 2. Convert to integer (remainder is always < 91, so atoi is safe)
-        int rem = atoi(rawStr); 
-
-        // 3. CRITICAL: Free the memory allocated by toString()
-        free(rawStr); 
-
-        tempBuf[index++] = base91_chars[rem];
-        n = quotient;
-    }
-
-    // Reverse into the output buffer
-    int outIdx = 0;
-    for (int i = index - 1; i >= 0; i--) {
-        if (outIdx < (int)bufSize - 1) {
-            outBuf[outIdx++] = tempBuf[i];
-        }
-    }
-    outBuf[outIdx] = '\0'; // Null terminate
-}
 
 // function that encodes an array of bytes to base91
 void encodeBase91(const uint8_t* data, size_t len, char* output) {
@@ -90,44 +50,8 @@ void encodeBase91(const uint8_t* data, size_t len, char* output) {
 }
 
 
-/*
-BigNumber fromBase91(const String &s) {
-  BigNumber base = 91;
-  BigNumber result = 0;
-
-  for (int i = 0; i < s.length(); i++) {
-    char c = s[i];
-    const char *pos = strchr(base91_chars, c);
-    if (!pos) continue;  // ignore invalid chars
-    BigNumber val((long)(pos - base91_chars));  // wrap in BigNumber
-    result = result * base + val;
-  }
-
-  return result;
-}
-*/
 
 
-
-BigNumber encodeMixedRadix(RadixItem* items, size_t count){
-    BigNumber encoded = 0;
-    BigNumber multiplier = 1;
-
-    for (size_t i = 0; i < count; i++)
-    {
-        // Access fields directly from the struct
-        uint16_t digit = items[i].value;
-        uint16_t base  = items[i].base;
-
-        // Safety modulo
-        uint16_t safe_digit = digit % base;
-
-        encoded += static_cast<BigNumber>(safe_digit) * multiplier;
-        multiplier *= static_cast<BigNumber>(base);
-    }
-
-    return encoded;
-}
 
 /*
 float lat = 0.0f, lng = 0.0f, age_s = 3600.0f, hdop = 0.0f;
@@ -140,16 +64,6 @@ uint8_t month = 0, day = 0, hour = 0, minute = 0, second = 9, centisecond = 0, s
 uint16_t MRenc_alt = 65532, MRenc_speed = 65532, MRenc_hdop = 65532;
 
 */
-void MRencode_convert(float hdop, float alt, float speed_kmh, float course_deg,
-                      uint16_t PVvoltage, uint16_t *enc_alt, uint16_t *enc_speed,
-                      uint16_t *enc_hdop, uint16_t *enc_bat, uint16_t *enc_pv) {
-
-  *enc_alt  = alt / 20;
-  *enc_speed = speed_kmh / 2;
-  *enc_hdop  = hdop * 10;
-  *enc_pv    = PVvoltage / 10;
-
-}
 
 
 
