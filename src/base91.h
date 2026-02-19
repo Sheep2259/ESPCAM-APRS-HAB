@@ -1,9 +1,6 @@
 #ifndef BASE91_H
 #define BASE91_H
 
-#include <Arduino.h>
-
-
 void encodeBase91(const uint8_t* data, size_t len, char* output);
 
 void aprsFormatLat(float lat, char* buf, size_t bufSize);
