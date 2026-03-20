@@ -130,8 +130,14 @@ void setup() {
   //Serial2.begin(9600, SERIAL_8N1, gpsRXPin, gpsTXPin);  // 9600, 5, 4
 
   if(!LittleFS.begin(true)){
-        return;
+    Serial.println("LittleFS mount failed!");
+    while(true) delay(1000); // halt visibly
   }
+  Serial.println("LittleFS mounted OK");
+
+  Serial.printf("LittleFS total: %u bytes\n", LittleFS.totalBytes());
+  Serial.printf("LittleFS used:  %u bytes\n", LittleFS.usedBytes());
+  Serial.printf("LittleFS free:  %u bytes\n", LittleFS.totalBytes() - LittleFS.usedBytes());
 
 }
 
@@ -175,7 +181,13 @@ void loop() {
   if ((lastquality == 0) && (quality == 1) && (millis() > 20000)){
     // when we enter a high quality area, take image
     snprintf(timestampchars, sizeof(timestampchars), "%d/%d/%d/%d/%d", month, day, hour, minute, second);
-    savePhoto(1, lat, lng, alt, timestampchars);
+    esp_err_t result = savePhoto(1, lat, lng, alt, timestampchars);
+    Serial.printf("savePhoto result: %s\n", result == ESP_OK ? "OK" : "FAIL");
+    
+    // Dump savedImages so you can see if any slot got written
+    for (int i = 0; i < 16; i++) {
+        Serial.printf("savedImages[%d] = %d\n", i, savedImages[i]);
+    }
     lastquality = 1; // so that it doesnt keep taking images
     lastIMGTime = (millis() - (IMG_interval/2)); // wait half interval until next image
   }
@@ -223,7 +235,7 @@ void loop() {
 
       int filenum = IMGnToTX(savedImages);
       if (filenum == -1){
-          Serial.println("nothing");
+          Serial.println("no packets to send");
           return;
       }
       // 4 least significant bits is image number, 4 most is random to create prng seed variability when not moving
@@ -263,7 +275,6 @@ void loop() {
       else{
         Serial.print("encode failed");
         Serial.println(filenum);
-
       }
     }
   }

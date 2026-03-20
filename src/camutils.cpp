@@ -74,8 +74,8 @@ void StartCamera() {
 
     config.xclk_freq_hz = XCLK_FREQ_MHZ * 1000000;
     config.pixel_format = PIXFORMAT_JPEG;   // must be JPEG for fb->buf to be usable directly
-    config.frame_size   = FRAMESIZE_QQVGA;   // change as needed (see below)
-    config.jpeg_quality = 31;               // 0–63; lower = higher quality / larger file
+    config.frame_size   = FRAMESIZE_VGA;   // change as needed (see below)
+    config.jpeg_quality = 20;               // 0–63; lower = higher quality / larger file
     config.fb_location  = CAMERA_FB_IN_PSRAM;
     config.fb_count     = 1;               // double-buffer; use 1 if no PSRAM
     config.grab_mode    = CAMERA_GRAB_WHEN_EMPTY;
@@ -172,6 +172,80 @@ camera_fb_t* captureJpeg() {
 
 
 esp_err_t savePhoto(uint8_t quality, double lat, double lng, float alt, const char* timeStr) {
+    camera_fb_t *fb = captureJpeg();
+    if (!fb) {
+        Serial.println("Frame buffer could not be acquired");
+        return ESP_FAIL;
+    }
+
+    uint8_t *buf = fb->buf;
+    size_t len = fb->len;
+
+    uint8_t startIdx = (quality == 1) ? 0 : 8;
+    uint8_t endIdx   = (quality == 1) ? 8 : 16;
+    bool saved = false;
+
+    for (uint8_t i = startIdx; i < endIdx; i++) {
+        if (savedImages[i] == 0) {
+            char filename[12];
+            snprintf(filename, sizeof(filename), "/%d.jpg", i);
+
+            File file = LittleFS.open(filename, FILE_WRITE);
+            if (!file) {
+                Serial.println("Failed to open file for writing");
+                esp_camera_fb_return(fb);
+                return ESP_FAIL;
+            }
+
+            // Copy from PSRAM to internal RAM in chunks before writing
+            const size_t CHUNK = 512;
+            uint8_t chunkBuf[CHUNK];
+            size_t totalWritten = 0;
+            size_t offset = 0;
+
+            while (offset < len) {
+                size_t toWrite = min(CHUNK, len - offset);
+                memcpy(chunkBuf, buf + offset, toWrite);  // PSRAM -> internal RAM
+                size_t written = file.write(chunkBuf, toWrite);
+                if (written != toWrite) {
+                    Serial.printf("Write failed at offset %u\n", offset);
+                    break;
+                }
+                totalWritten += written;
+                offset += toWrite;
+            }
+
+            Serial.printf("Wrote %u of %u bytes\n", totalWritten, len);
+
+            file.printf("||META:T=%s,LT=%.6f,LN=%.6f,A=%.0f", timeStr, lat, lng, alt);
+            file.flush();                    // force write to filesystem
+            size_t finalSize = file.size(); // now accurate
+            file.close();
+
+            if (finalSize == 0) {
+                Serial.println("savePhoto: file size still 0 after write");
+                esp_camera_fb_return(fb);
+                return ESP_FAIL;
+            }
+
+            savedImages[i] = ceil((finalSize * 1.1) / 50.0);
+            imageVersion[i]++;
+            prefs.putBytes("version", imageVersion, sizeof(imageVersion));
+            prefs.putBytes("remain", savedImages, sizeof(savedImages));
+            saved = true;
+            break;
+        }
+    }
+
+    esp_camera_fb_return(fb);
+    if (!saved) Serial.println("No available slots to save image.");
+    return saved ? ESP_OK : ESP_FAIL;
+}
+
+
+
+/*
+esp_err_t savePhoto(uint8_t quality, double lat, double lng, float alt, const char* timeStr) {
   // Capture a frame
   camera_fb_t *fb = captureJpeg();
   if (!fb) {
@@ -202,7 +276,18 @@ esp_err_t savePhoto(uint8_t quality, double lat, double lng, float alt, const ch
       file.printf("||META:T=%s,LT=%.6f,LN=%.6f,A=%.0f", timeStr, lat, lng, alt);
       size_t finalSize = file.size(); 
       file.close();
+
+      size_t written = file.write(buf, len);
+      Serial.printf("Attempted to write %u bytes, actually wrote %u bytes\n", len, written);
+
+      if (finalSize == 0){
+        Serial.print("image size 0, error");
+        esp_camera_fb_return(fb);
+        return ESP_FAIL;
+      }
+
       savedImages[i] = ceil((finalSize * 1.1) / 50.0); 
+
       imageVersion[i]++;
       
       prefs.putBytes("version", imageVersion, sizeof(imageVersion));
@@ -217,7 +302,7 @@ esp_err_t savePhoto(uint8_t quality, double lat, double lng, float alt, const ch
   }
   return saved ? ESP_OK : ESP_FAIL;
 }
-
+*/
 
 
 
