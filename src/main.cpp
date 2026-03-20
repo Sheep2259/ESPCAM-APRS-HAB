@@ -90,6 +90,14 @@ void setup() {
 
   StartCamera();
 
+    // Flush warm-up frames so the first real capture is valid
+  for (int i = 0; i < 3; i++) {
+      camera_fb_t *warmup = esp_camera_fb_get();
+      if (warmup) esp_camera_fb_return(warmup);
+      delay(100);
+  }
+  Serial.println("Camera warm-up complete");
+
   uint8_t *frame;
   size_t   frame_len;
 
@@ -252,8 +260,12 @@ void loop() {
         counter++;
         digitalWrite(33, LOW);
       }
+      else{
+        Serial.print("encode failed");
+        Serial.println(filenum);
+
+      }
     }
-    Serial.println("nothing");
   }
 }
 
