@@ -13,6 +13,7 @@ constexpr int sxDIO0_pin = 12;
 constexpr int sxDIO1_pin = -1;
 constexpr int sxDIO2_pin = 4;
 
+// GPIO16 on this board (and possibly other boards below) is connected to onboard PSRAM. Using this GPIO for other purposes (eg as a button) will trigger the watchdog.
 
 // gps pin defs
 constexpr int gpsTXPin = -1;

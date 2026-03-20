@@ -1,24 +1,24 @@
-#include <RadioLib.h>
+//#include <RadioLib.h>
 #include <Arduino.h>
 //#include <SPI.h>
-#include <radio.h>
+//#include <radio.h>
 #include <pin_defs.h>
 #include <TinyGPSPlus.h>
 #include <GPS.h>
 #include <globals.h>
 #include <base91.h>
 #include <geofence.h>
-#include <camera.h>
 #include <quality.h>
 #include <LinearErasureCoder.h>
+#include "camutils.h"
 
 
 
 // send a telemetry packet every x packets (alternating lora and 2m)
-const unsigned telempacketinterval = 20;
+const unsigned telempacketinterval = 2000000;
 
-// send a packet every 10 seconds (10000ms)
-const unsigned long TX_INTERVAL = 10000;
+// send a packet every .5 seconds (500ms)
+const unsigned long TX_INTERVAL = 500;
 
 // take and store an image every 1 hour (3600000ms)
 const unsigned long IMG_interval  = 3600000;
@@ -55,7 +55,7 @@ unsigned long lastTxTime = 0;
 unsigned long lastIMGTime = 0;
 unsigned long lastprefsupdatetime = 0;
 
-unsigned quality = 0;
+unsigned quality = 1;
 unsigned lastquality = 0;
 
 char telemmsg[68];
@@ -66,24 +66,48 @@ LinearErasureCoder coder(53); // 53 byte packets
 char timestampchars[30];
 
 
+
+
+
 void setup() {
   
+  Serial.begin(115200);
+
   delay(3000);
 
-  Serial.begin(115200);
+  pinMode(33, OUTPUT);
+
+  Serial.print("3");
+  digitalWrite(33, LOW);
+  delay(1000);
+  Serial.print("2");
+  digitalWrite(33, HIGH);
+  delay(1000);
+  Serial.print("1");
+  digitalWrite(33, LOW);
+  delay(1000); 
+  digitalWrite(33, HIGH);
+
+  StartCamera();
+
+  uint8_t *frame;
+  size_t   frame_len;
 
   prefs.begin("img_data", false);
   size_t savedimagesize = prefs.getBytes("remain", savedImages, sizeof(savedImages));
   
   if (savedimagesize == 0) {
     memset(savedImages, 0, sizeof(savedImages));
+    prefs.putBytes("remain", savedImages, sizeof(savedImages));
   }
 
   size_t versionSize = prefs.getBytes("version", imageVersion, sizeof(imageVersion));
 
   if (versionSize == 0) {
     memset(imageVersion, 0, sizeof(imageVersion));
+    prefs.putBytes("version", imageVersion, sizeof(imageVersion));
   }
+  
 
   //SPI.setRX(sxMISO_pin); // MISO
   //SPI.setTX(sxMOSI_pin); // MOSI
@@ -101,7 +125,6 @@ void setup() {
         return;
   }
 
-  cam_init();
 }
 
 
@@ -118,7 +141,9 @@ void loop() {
 		}
 	} 
 
-  RXfinishedimages(savedImages); // recieve finished image packets and update remaining packets (if recieved)
+  lng = lng + 0.00001;
+
+  //RXfinishedimages(savedImages); // recieve finished image packets and update remaining packets (if recieved)
 
   if ((millis() - lastprefsupdatetime) >= updateprefs){
     prefs.putBytes("remain", savedImages, sizeof(savedImages));
@@ -139,7 +164,7 @@ void loop() {
     }
   }
 
-  if ((lastquality == 0) && (quality == 1)){
+  if ((lastquality == 0) && (quality == 1) && (millis() > 20000)){
     // when we enter a high quality area, take image
     snprintf(timestampchars, sizeof(timestampchars), "%d/%d/%d/%d/%d", month, day, hour, minute, second);
     savePhoto(1, lat, lng, alt, timestampchars);
@@ -152,11 +177,11 @@ void loop() {
 
   if (millis() - lastTxTime >= TX_INTERVAL) {
 
+    lastTxTime = millis();
+
 
     aprsFormatLat(lat, latitudechars, sizeof(latitudechars));
     aprsFormatLng(lng, longitudechars, sizeof(longitudechars));
-    lastquality = quality;
-    quality = locationQuality(lat, lng);
     GEOFENCE_position(lat, lng);
 
 
@@ -171,13 +196,13 @@ void loop() {
       lastTxTime = millis(); // Reset timer
 
       if ((counter % (telempacketinterval * 2)) == 0) { // do half and half 2m/lora for telem packets
-        transmit_2m(callsign, destination, latitudechars, longitudechars, telemmsg);
+        //transmit_2m(callsign, destination, latitudechars, longitudechars, telemmsg);
         Serial.print(telemmsg);
         Serial.println(" :2m payload");
         counter++;
       } 
       else {
-        transmit_lora(callsign, destination, latitudechars, longitudechars, telemmsg);
+        //transmit_lora(callsign, destination, latitudechars, longitudechars, telemmsg);
         Serial.print(telemmsg);
         Serial.println(" :lora payload");
         counter++;
@@ -190,6 +215,7 @@ void loop() {
 
       int filenum = IMGnToTX(savedImages);
       if (filenum == -1){
+          Serial.println("nothing");
           return;
       }
       // 4 least significant bits is image number, 4 most is random to create prng seed variability when not moving
@@ -215,15 +241,19 @@ void loop() {
         encodeBase91(packetData, sizeof(packetData), outputBuffer);
 
         lastTxTime = millis(); // Reset timer
-        transmit_2m(callsign, destination, latitudechars, longitudechars, outputBuffer);
+        // transmit_2m(callsign, destination, latitudechars, longitudechars, outputBuffer);
+        Serial.printf("%s, %s, %s", latitudechars, longitudechars, outputBuffer);
+        Serial.println();
 
-        if (receptionlocation(lat, lng)){
-          savedImages[filenum]--; // if pretty sure packet recieved, decrement remaining for that image (mostly a fallback from rx packets)
-        }
+        //if (receptionlocation(lat, lng)){
+        //  savedImages[filenum]--; // if pretty sure packet recieved, decrement remaining for that image (mostly a fallback from rx packets)
+        //}
 
         counter++;
+        digitalWrite(33, LOW);
       }
     }
+    Serial.println("nothing");
   }
 }
 
