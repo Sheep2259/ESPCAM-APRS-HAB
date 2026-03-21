@@ -43,7 +43,7 @@ uint8_t imageVersion[16];
 // 8 MHz is conservative and avoids artefacts on clones.
 // Increase to 20 for best frame rate if your module handles it.
 // -------------------------------------------------------
-#define XCLK_FREQ_MHZ 8
+#define XCLK_FREQ_MHZ 20
 
 // -------------------------------------------------------
 // StartCamera()
@@ -74,11 +74,11 @@ void StartCamera() {
 
     config.xclk_freq_hz = XCLK_FREQ_MHZ * 1000000;
     config.pixel_format = PIXFORMAT_JPEG;   // must be JPEG for fb->buf to be usable directly
-    config.frame_size   = FRAMESIZE_QQVGA;   // change as needed (see below)
-    config.jpeg_quality = 31;               // 0–63; lower = higher quality / larger file
+    config.frame_size   = FRAMESIZE_SXGA;   // change as needed (see below)
+    config.jpeg_quality = 15;               // 0–63; lower = higher quality / larger file
     config.fb_location  = CAMERA_FB_IN_PSRAM;
-    config.fb_count     = 1;               // double-buffer; use 1 if no PSRAM
-    config.grab_mode    = CAMERA_GRAB_WHEN_EMPTY;
+    config.fb_count     = 2;               // double-buffer; use 1 if no PSRAM
+    config.grab_mode    = CAMERA_GRAB_LATEST;
 
     /*
      * frame_size options (from API.md / esp-camera headers):
@@ -149,7 +149,15 @@ void StartCamera() {
 // the buffer, or memory will leak.
 // -------------------------------------------------------
 camera_fb_t* captureJpeg() {
-    camera_fb_t *fb = esp_camera_fb_get();
+    camera_fb_t *fb = nullptr;
+
+    // Retry up to 3 times with increasing delay — sensor may need time at large resolutions
+    for (int attempt = 0; attempt < 3; attempt++) {
+        fb = esp_camera_fb_get();
+        if (fb) break;
+        Serial.printf("captureJpeg: attempt %d failed, retrying...\n", attempt + 1);
+        delay(500 * (attempt + 1));  // 500ms, 1000ms, 1500ms
+    }
 
     if (!fb) {
         Serial.printf("captureJpeg failed — heap free: %u, PSRAM free: %u\n",
@@ -159,9 +167,7 @@ camera_fb_t* captureJpeg() {
     }
 
     if (fb->format != PIXFORMAT_JPEG) {
-        // This shouldn't happen if config.pixel_format = PIXFORMAT_JPEG,
-        // but guard it anyway.
-        Serial.println("captureJpeg: unexpected non-JPEG frame — returning buffer");
+        Serial.println("captureJpeg: unexpected non-JPEG frame");
         esp_camera_fb_return(fb);
         return nullptr;
     }

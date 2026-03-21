@@ -156,6 +156,11 @@ void loop() {
 	} 
 
   lng = lng + 0.00001;
+  if (lng > 170){
+    lng = 0;
+    lat = lat + 0.00001;
+  }
+
 
   //RXfinishedimages(savedImages); // recieve finished image packets and update remaining packets (if recieved)
 
