@@ -75,7 +75,7 @@ void StartCamera() {
     config.xclk_freq_hz = XCLK_FREQ_MHZ * 1000000;
     config.pixel_format = PIXFORMAT_JPEG;   // must be JPEG for fb->buf to be usable directly
     config.frame_size   = FRAMESIZE_SXGA;   // change as needed (see below)
-    config.jpeg_quality = 15;               // 0–63; lower = higher quality / larger file
+    config.jpeg_quality = 12;               // 0–63; lower = higher quality / larger file
     config.fb_location  = CAMERA_FB_IN_PSRAM;
     config.fb_count     = 2;               // double-buffer; use 1 if no PSRAM
     config.grab_mode    = CAMERA_GRAB_LATEST;
@@ -172,7 +172,6 @@ camera_fb_t* captureJpeg() {
         return nullptr;
     }
 
-    digitalWrite(33, LOW);
     return fb;
 }
 
@@ -234,7 +233,7 @@ esp_err_t savePhoto(uint8_t quality, double lat, double lng, float alt, const ch
                 return ESP_FAIL;
             }
 
-            savedImages[i] = ceil((finalSize * 1.1) / 50.0);
+            savedImages[i] = ceil((finalSize * 1.1) / 53.0);
             imageVersion[i]++;
             prefs.putBytes("version", imageVersion, sizeof(imageVersion));
             prefs.putBytes("remain", savedImages, sizeof(savedImages));

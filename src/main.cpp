@@ -56,7 +56,7 @@ unsigned long lastIMGTime = 0;
 unsigned long lastprefsupdatetime = 0;
 
 unsigned quality = 1;
-unsigned lastquality = 0;
+unsigned lastquality = 1;
 
 char telemmsg[68];
 
@@ -155,10 +155,10 @@ void loop() {
 		}
 	} 
 
-  lng = lng + 0.00001;
+  lng = lng + 0.00002;
   if (lng > 170){
     lng = 0;
-    lat = lat + 0.00001;
+    lat = lat + 0.0001;
   }
 
 
@@ -259,6 +259,7 @@ void loop() {
       snprintf(accessfilebuf, sizeof(accessfilebuf), "/%d.jpg", filenum);
 
       if (coder.encodePacket(LittleFS, accessfilebuf, trunclat, trunclon, identifier, packetData)) {
+
         // bytes 0-52 are already filled (53 bytes)
         packetData[53] = identifier;
 
