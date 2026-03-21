@@ -18,13 +18,13 @@
 const unsigned telempacketinterval = 2000000;
 
 // send a packet every .5 seconds (500ms)
-const unsigned long TX_INTERVAL = 500;
+const unsigned long TX_INTERVAL = 200;
 
-// take and store an image every 1 hour (3600000ms)
-const unsigned long IMG_interval  = 3600000;
+// take and store an image every 10 hour (36000000ms)
+const unsigned long IMG_interval  = 36000000;
 
-// sync remaining packets to preferences (flash) every 10 mins
-const unsigned updateprefs = 600000;
+// sync remaining packets to preferences (flash) every 1000 mins
+const unsigned updateprefs = 60000000;
 
 
 
@@ -56,7 +56,7 @@ unsigned long lastIMGTime = 0;
 unsigned long lastprefsupdatetime = 0;
 
 unsigned quality = 1;
-unsigned lastquality = 1;
+unsigned lastquality = 0;
 
 char telemmsg[68];
 

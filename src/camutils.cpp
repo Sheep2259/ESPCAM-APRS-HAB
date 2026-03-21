@@ -164,8 +164,8 @@ void StartCamera() {
 
     config.xclk_freq_hz = XCLK_FREQ_MHZ * 1000000;
     config.pixel_format = PIXFORMAT_JPEG;   // must be JPEG for fb->buf to be usable directly
-    config.frame_size   = FRAMESIZE_SVGA;   // change as needed (see below)
-    config.jpeg_quality = 15;               // 0–63; lower = higher quality / larger file
+    config.frame_size   = FRAMESIZE_SXGA;   // change as needed (see below)
+    config.jpeg_quality = 8;               // 0–63; lower = higher quality / larger file
     config.fb_location  = CAMERA_FB_IN_PSRAM;
     config.fb_count     = 2;               // double-buffer; use 1 if no PSRAM
     config.grab_mode    = CAMERA_GRAB_LATEST;
