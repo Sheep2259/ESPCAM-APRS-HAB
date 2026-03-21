@@ -13,11 +13,16 @@ uint8_t LinearErasureCoder::gf_mul(uint8_t a, uint8_t b) {
     return gf_exp[(int)gf_log[a] + (int)gf_log[b]];
 }
 
-uint32_t LinearErasureCoder::hashSeeds(float a, float b, uint8_t c) {
-    uint32_t ia, ib;
-    // Raw bit copy to avoid strict aliasing violations or value normalization
-    memcpy(&ia, &a, sizeof(float));
-    memcpy(&ib, &b, sizeof(float));
+uint32_t LinearErasureCoder::hashSeeds(const char* latStr, const char* lngStr, uint8_t c) {
+    // Fold each string into a uint32_t via polynomial accumulation
+    uint32_t ia = 0;
+    for (size_t i = 0; latStr[i] != '\0'; i++) {
+        ia = ia * 31 + (uint8_t)latStr[i];
+    }
+    uint32_t ib = 0;
+    for (size_t i = 0; lngStr[i] != '\0'; i++) {
+        ib = ib * 31 + (uint8_t)lngStr[i];
+    }
 
     // Combine seeds
     uint32_t state = ia ^ ib ^ c;
@@ -41,7 +46,7 @@ uint8_t LinearErasureCoder::getNextCoefficient(uint32_t* state) {
     return coeff;
 }
 
-bool LinearErasureCoder::encodePacket(fs::FS &fs, const char* filename, float seedA, float seedB, uint8_t seedC, uint8_t* outputBuf) {
+bool LinearErasureCoder::encodePacket(fs::FS &fs, const char* filename, const char* latStr, const char* lngStr, uint8_t seedC, uint8_t* outputBuf) {
     File file = fs.open(filename, "r");
     if (!file) {
         return false;
@@ -59,7 +64,7 @@ bool LinearErasureCoder::encodePacket(fs::FS &fs, const char* filename, float se
     memset(outputBuf, 0, _packetSize);
 
     // Initialize PRNG
-    uint32_t prngState = hashSeeds(seedA, seedB, seedC);
+    uint32_t prngState = hashSeeds(latStr, lngStr, seedC);
 
     // Calculate total blocks K
     size_t K = (fileSize + _packetSize - 1) / _packetSize;

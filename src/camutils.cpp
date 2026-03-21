@@ -6,6 +6,96 @@
 
 Preferences prefs;
 
+// -------------------------------------------------------
+// validateJpegBuffer()
+// Checks that a buffer in RAM is a well-formed JPEG:
+//   • Starts with SOI marker  FF D8
+//   • Contains an EOI marker  FF D9 within the last 32 bytes
+//
+// Call this on the raw camera framebuffer before writing to flash.
+// Returns true if the JPEG looks intact.
+// -------------------------------------------------------
+bool validateJpegBuffer(const uint8_t* buf, size_t len) {
+    if (len < 4) {
+        Serial.printf("validateJpegBuffer: too small (%u bytes)\n", (unsigned)len);
+        return false;
+    }
+    // JPEG SOI
+    if (buf[0] != 0xFF || buf[1] != 0xD8) {
+        Serial.printf("validateJpegBuffer: bad SOI bytes: %02X %02X\n", buf[0], buf[1]);
+        return false;
+    }
+    // JPEG EOI must appear somewhere in the last 32 bytes
+    size_t scanFrom = (len >= 32) ? len - 32 : 0;
+    for (size_t i = scanFrom; i < len - 1; i++) {
+        if (buf[i] == 0xFF && buf[i + 1] == 0xD9) return true;
+    }
+    Serial.println("validateJpegBuffer: no EOI marker found");
+    return false;
+}
+
+// -------------------------------------------------------
+// validateJpegFile()
+// Re-reads a saved file from LittleFS and checks:
+//   • Starts with SOI  FF D8
+//   • Contains an EOI  FF D9 somewhere in the final 300 bytes
+//     (before the appended ||META: block)
+//
+// The tail scan covers the last 300 bytes of the file, which
+// is well beyond the ~80-byte metadata trailer.
+// Returns true if the file appears to be a valid JPEG.
+// -------------------------------------------------------
+bool validateJpegFile(const char* filename) {
+    File f = LittleFS.open(filename, "r");
+    if (!f) {
+        Serial.printf("validateJpegFile: cannot open %s\n", filename);
+        return false;
+    }
+    size_t fileSize = f.size();
+    if (fileSize < 4) {
+        Serial.printf("validateJpegFile: file too small (%u bytes)\n", (unsigned)fileSize);
+        f.close();
+        return false;
+    }
+
+    // --- Check SOI at start ---
+    uint8_t header[3] = {0};
+    if (f.read(header, 3) != 3 || header[0] != 0xFF || header[1] != 0xD8) {
+        Serial.printf("validateJpegFile: bad SOI in %s (%02X %02X)\n",
+                      filename, header[0], header[1]);
+        f.close();
+        return false;
+    }
+
+    // --- Scan tail for EOI ---
+    // Read up to 300 bytes from near the end.
+    // This sits past any real JPEG data and before/within the metadata trailer.
+    const size_t TAIL_WINDOW = 200;
+    size_t scanFrom = (fileSize > TAIL_WINDOW) ? fileSize - TAIL_WINDOW : 3;
+    if (!f.seek(scanFrom)) {
+        Serial.printf("validateJpegFile: seek failed in %s\n", filename);
+        f.close();
+        return false;
+    }
+
+    uint8_t prev = 0;
+    bool foundEOI = false;
+    while (f.available()) {
+        uint8_t b = (uint8_t)f.read();
+        if (prev == 0xFF && b == 0xD9) {
+            foundEOI = true;
+            break;
+        }
+        prev = b;
+    }
+
+    f.close();
+    if (!foundEOI) {
+        Serial.printf("validateJpegFile: no EOI marker in tail of %s\n", filename);
+    }
+    return foundEOI;
+}
+
 // savedImages array contains the remaining packets required for complete transmission
 // default is 0 for nonexistent images, when remaining packets are decremented to 0 it is safe to overwrite
 uint16_t savedImages[16];
@@ -74,8 +164,8 @@ void StartCamera() {
 
     config.xclk_freq_hz = XCLK_FREQ_MHZ * 1000000;
     config.pixel_format = PIXFORMAT_JPEG;   // must be JPEG for fb->buf to be usable directly
-    config.frame_size   = FRAMESIZE_SXGA;   // change as needed (see below)
-    config.jpeg_quality = 12;               // 0–63; lower = higher quality / larger file
+    config.frame_size   = FRAMESIZE_SVGA;   // change as needed (see below)
+    config.jpeg_quality = 15;               // 0–63; lower = higher quality / larger file
     config.fb_location  = CAMERA_FB_IN_PSRAM;
     config.fb_count     = 2;               // double-buffer; use 1 if no PSRAM
     config.grab_mode    = CAMERA_GRAB_LATEST;
@@ -179,12 +269,22 @@ camera_fb_t* captureJpeg() {
 esp_err_t savePhoto(uint8_t quality, double lat, double lng, float alt, const char* timeStr) {
     camera_fb_t *fb = captureJpeg();
     if (!fb) {
-        Serial.println("Frame buffer could not be acquired");
+        Serial.println("savePhoto: frame buffer could not be acquired");
         return ESP_FAIL;
     }
 
     uint8_t *buf = fb->buf;
     size_t len = fb->len;
+
+    // ------------------------------------------------------------------
+    // Step 2: Validate the JPEG in PSRAM before touching the filesystem.
+    // A bad frame here means we never waste a flash slot on corrupt data.
+    // ------------------------------------------------------------------
+    if (!validateJpegBuffer(buf, len)) {
+        Serial.println("savePhoto: captured frame failed JPEG validation — discarding");
+        esp_camera_fb_return(fb);
+        return ESP_FAIL;
+    }
 
     uint8_t startIdx = (quality == 1) ? 0 : 8;
     uint8_t endIdx   = (quality == 1) ? 8 : 16;
@@ -197,43 +297,77 @@ esp_err_t savePhoto(uint8_t quality, double lat, double lng, float alt, const ch
 
             File file = LittleFS.open(filename, FILE_WRITE);
             if (!file) {
-                Serial.println("Failed to open file for writing");
+                Serial.println("savePhoto: failed to open file for writing");
                 esp_camera_fb_return(fb);
                 return ESP_FAIL;
             }
 
-            // Copy from PSRAM to internal RAM in chunks before writing
+            // ----------------------------------------------------------
+            // Step 3: Write JPEG from PSRAM to flash in 512-byte chunks.
+            // ----------------------------------------------------------
             const size_t CHUNK = 512;
             uint8_t chunkBuf[CHUNK];
             size_t totalWritten = 0;
             size_t offset = 0;
+            bool writeError = false;
 
             while (offset < len) {
                 size_t toWrite = min(CHUNK, len - offset);
-                memcpy(chunkBuf, buf + offset, toWrite);  // PSRAM -> internal RAM
+                memcpy(chunkBuf, buf + offset, toWrite);   // PSRAM -> SRAM
                 size_t written = file.write(chunkBuf, toWrite);
                 if (written != toWrite) {
-                    Serial.printf("Write failed at offset %u\n", offset);
+                    Serial.printf("savePhoto: write failed at offset %u "
+                                  "(wanted %u got %u)\n",
+                                  (unsigned)offset, (unsigned)toWrite, (unsigned)written);
+                    writeError = true;
                     break;
                 }
                 totalWritten += written;
                 offset += toWrite;
             }
 
-            Serial.printf("Wrote %u of %u bytes\n", totalWritten, len);
-
-            file.printf("||META:T=%s,LT=%.6f,LN=%.6f,A=%.0f", timeStr, lat, lng, alt);
-            file.flush();                    // force write to filesystem
-            size_t finalSize = file.size(); // now accurate
-            file.close();
-
-            if (finalSize == 0) {
-                Serial.println("savePhoto: file size still 0 after write");
+            if (writeError || totalWritten != len) {
+                Serial.printf("savePhoto: incomplete write (%u/%u bytes) — deleting slot\n",
+                              (unsigned)totalWritten, (unsigned)len);
+                file.close();
+                LittleFS.remove(filename);
                 esp_camera_fb_return(fb);
                 return ESP_FAIL;
             }
 
-            savedImages[i] = ceil((finalSize * 1.1) / 53.0);
+            // ----------------------------------------------------------
+            // Step 4: Append metadata trailer (original format).
+            // ----------------------------------------------------------
+            file.printf("||META:T=%s,LT=%.6f,LN=%.6f,A=%.0f", timeStr, lat, lng, alt);
+            file.flush();
+            size_t finalSize = file.size();
+            file.close();
+
+            Serial.printf("savePhoto: wrote %u bytes (JPEG) + trailer = %u total\n",
+                          (unsigned)len, (unsigned)finalSize);
+
+            if (finalSize == 0) {
+                Serial.println("savePhoto: file size is 0 after write — aborting");
+                LittleFS.remove(filename);
+                esp_camera_fb_return(fb);
+                return ESP_FAIL;
+            }
+
+            // ----------------------------------------------------------
+            // Step 5: Re-read the file from flash and validate it.
+            // This catches filesystem write errors or silent corruption.
+            // ----------------------------------------------------------
+            if (!validateJpegFile(filename)) {
+                Serial.printf("savePhoto: post-write validation FAILED for %s — deleting\n",
+                              filename);
+                LittleFS.remove(filename);
+                esp_camera_fb_return(fb);
+                return ESP_FAIL;
+            }
+
+            Serial.printf("savePhoto: slot %d validated OK\n", i);
+
+            savedImages[i] = (uint16_t)ceil((finalSize * 1.1) / 53.0);
             imageVersion[i]++;
             prefs.putBytes("version", imageVersion, sizeof(imageVersion));
             prefs.putBytes("remain", savedImages, sizeof(savedImages));
@@ -243,72 +377,9 @@ esp_err_t savePhoto(uint8_t quality, double lat, double lng, float alt, const ch
     }
 
     esp_camera_fb_return(fb);
-    if (!saved) Serial.println("No available slots to save image.");
+    if (!saved) Serial.println("savePhoto: no available slots.");
     return saved ? ESP_OK : ESP_FAIL;
 }
-
-
-
-/*
-esp_err_t savePhoto(uint8_t quality, double lat, double lng, float alt, const char* timeStr) {
-  // Capture a frame
-  camera_fb_t *fb = captureJpeg();
-  if (!fb) {
-    Serial.println("Frame buffer could not be acquired");
-    return ESP_FAIL;
-  }
-  uint8_t *buf = fb->buf;
-  size_t len = fb->len;
-
-  uint8_t startIdx = (quality == 1) ? 0 : 8;
-  uint8_t endIdx = (quality == 1) ? 8 : 16;
-  bool saved = false;
-  for (uint8_t i = startIdx; i < endIdx; i++) {
-    if (savedImages[i] == 0) { 
-      char filename[12];
-      snprintf(filename, sizeof(filename), "/%d.jpg", i);
-      
-      File file = LittleFS.open(filename, FILE_WRITE);
-      if (!file) {
-        Serial.println("Failed to open file for writing");
-        esp_camera_fb_return(fb);
-        return ESP_FAIL;
-      }
-      // Write the image data
-      file.write(buf, len); 
-      
-      // Append metadata to the end of the file
-      file.printf("||META:T=%s,LT=%.6f,LN=%.6f,A=%.0f", timeStr, lat, lng, alt);
-      size_t finalSize = file.size(); 
-      file.close();
-
-      size_t written = file.write(buf, len);
-      Serial.printf("Attempted to write %u bytes, actually wrote %u bytes\n", len, written);
-
-      if (finalSize == 0){
-        Serial.print("image size 0, error");
-        esp_camera_fb_return(fb);
-        return ESP_FAIL;
-      }
-
-      savedImages[i] = ceil((finalSize * 1.1) / 50.0); 
-
-      imageVersion[i]++;
-      
-      prefs.putBytes("version", imageVersion, sizeof(imageVersion));
-      prefs.putBytes("remain", savedImages, sizeof(savedImages));
-      saved = true;
-      break;
-    }
-  }
-  esp_camera_fb_return(fb);
-  if (!saved) {
-    Serial.println("No available slots to save image.");
-  }
-  return saved ? ESP_OK : ESP_FAIL;
-}
-*/
-
 
 
 

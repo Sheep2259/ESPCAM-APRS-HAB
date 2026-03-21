@@ -252,13 +252,10 @@ void loop() {
       identifier += (imageVersion[filenum] & 0x03) * 16; // take 2 least significant bits and put them in positions 00110000
       identifier += filenum; // 0-15, so 00001111
 
-      float trunclat = truncParseLat(latitudechars); // returns lat/lng in precision aprs encodes it in,
-      float trunclon = truncParseLng(longitudechars); // for prng seed so reciever can reconstruct
-
       char accessfilebuf[12];
       snprintf(accessfilebuf, sizeof(accessfilebuf), "/%d.jpg", filenum);
 
-      if (coder.encodePacket(LittleFS, accessfilebuf, trunclat, trunclon, identifier, packetData)) {
+      if (coder.encodePacket(LittleFS, accessfilebuf, latitudechars, longitudechars, identifier, packetData)) {
 
         // bytes 0-52 are already filled (53 bytes)
         packetData[53] = identifier;
@@ -276,7 +273,6 @@ void loop() {
         //}
 
         counter++;
-        digitalWrite(33, LOW);
       }
       else{
         Serial.print("encode failed");
@@ -285,11 +281,3 @@ void loop() {
     }
   }
 }
-
-
-
-
-
-
-
-
