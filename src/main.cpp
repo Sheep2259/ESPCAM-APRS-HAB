@@ -1,7 +1,7 @@
-//#include <RadioLib.h>
+#include <RadioLib.h>
 #include <Arduino.h>
-//#include <SPI.h>
-//#include <radio.h>
+#include <SPI.h>
+#include <radio.h>
 #include <pin_defs.h>
 #include <TinyGPSPlus.h>
 #include <GPS.h>
@@ -28,8 +28,6 @@ const unsigned updateprefs = 60000000;
 
 
 
-
-int solarvoltage;
 uint32_t counter = 0;
 
 float lat = 0.0f, lng = 0.0f, age_s = 3600.0f, hdop = 0.0f;
@@ -56,7 +54,7 @@ unsigned long lastIMGTime = 0;
 unsigned long lastprefsupdatetime = 0;
 
 unsigned quality = 1;
-unsigned lastquality = 0;
+unsigned lastquality = 1;
 
 char telemmsg[68];
 
@@ -117,15 +115,9 @@ void setup() {
   }
   
 
-  //SPI.setRX(sxMISO_pin); // MISO
-  //SPI.setTX(sxMOSI_pin); // MOSI
-  //SPI.setSCK(sxSCK_pin); // SCK
-  //SPI.setCS(sxCS_pin);   // CSn
-  //SPI.begin();
+  SPI.begin(sxSCK_pin, sxMISO_pin, sxMOSI_pin, -1); // NSS is fed in when the radio stuf initialiased
 
   GEOFENCE_position(lat, lng);
-
-  analogReadResolution(12);
 
   //Serial2.begin(9600, SERIAL_8N1, gpsRXPin, gpsTXPin);  // 9600, 5, 4
 
@@ -213,10 +205,8 @@ void loop() {
 
 
     if ((counter % telempacketinterval) == 0){
-      solarvoltage = analogRead(vsensesolar_pin);
-
-      snprintf(telemmsg, sizeof(telemmsg), "T:%d/%d/%d/%d/%dP:%.0f/%.0f/%d/%.1fS:%d/%d", 
-        month, day, hour, minute, second, alt, speed_kmh, sats, hdop, solarvoltage, counter); // about 47 chars used
+      snprintf(telemmsg, sizeof(telemmsg), "T:%d/%d/%d/%d/%dP:%.0f/%.0f/%d/%.1fS:%d", 
+        month, day, hour, minute, second, alt, speed_kmh, sats, hdop, counter); // about 45 chars used
 
       lastTxTime = millis(); // Reset timer
 
@@ -247,7 +237,7 @@ void loop() {
       uint8_t identifier = 0; 
 
       uint32_t raw_random = esp_random();
-      // Mask with 0xF0 (binary 11000000) to keep only the higher 2 bits
+      // Mask with 0xC0 (binary 11000000) to keep only the higher 2 bits
       identifier = raw_random & 0xC0;
       identifier += (imageVersion[filenum] & 0x03) * 16; // take 2 least significant bits and put them in positions 00110000
       identifier += filenum; // 0-15, so 00001111
