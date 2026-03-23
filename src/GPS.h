@@ -1,3 +1,6 @@
+#ifndef GPS_H
+#define GPS_H
+
 void UpdateGPSInfo(
   float &lat, float &lng, float &age_s,                 // location + age (s)
   uint16_t &year, uint8_t &month, uint8_t &day,         // date (UTC)
@@ -8,3 +11,7 @@ void UpdateGPSInfo(
   uint8_t &sats,                                        // satellite count
   float &hdop                                           // HDOP
 );
+
+extern TinyGPSPlus gps;
+
+#endif

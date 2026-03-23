@@ -5,7 +5,6 @@
 #include <pin_defs.h>
 #include <TinyGPSPlus.h>
 #include <GPS.h>
-#include <globals.h>
 #include <base91.h>
 #include <geofence.h>
 #include <quality.h>
@@ -15,16 +14,16 @@
 
 
 // send a telemetry packet every x packets (alternating lora and 2m)
-const unsigned telempacketinterval = 2000000;
+const unsigned telempacketinterval = 20;
 
-// send a packet every .5 seconds (500ms)
-const unsigned long TX_INTERVAL = 200;
+// send a packet every 5 seconds (5000ms)
+const unsigned long TX_INTERVAL = 5000;
 
-// take and store an image every 10 hour (36000000ms)
-const unsigned long IMG_interval  = 36000000;
+// take and store an image every 1 hour (3600000ms)
+const unsigned long IMG_interval  = 3600000;
 
-// sync remaining packets to preferences (flash) every 1000 mins
-const unsigned updateprefs = 60000000;
+// sync remaining packets to preferences (flash) every 10 mins
+const unsigned updateprefs = 600000;
 
 
 
@@ -53,10 +52,10 @@ unsigned long lastTxTime = 0;
 unsigned long lastIMGTime = 0;
 unsigned long lastprefsupdatetime = 0;
 
-unsigned quality = 1;
-unsigned lastquality = 1;
+unsigned quality = 0;
+unsigned lastquality = 0;
 
-char telemmsg[68];
+char telemmsg[72];
 
 uint8_t packetData[54];
 LinearErasureCoder coder(53); // 53 byte packets
@@ -92,7 +91,7 @@ void setup() {
   for (int i = 0; i < 3; i++) {
       camera_fb_t *warmup = esp_camera_fb_get();
       if (warmup) esp_camera_fb_return(warmup);
-      delay(100);
+      delay(300);
   }
   Serial.println("Camera warm-up complete");
 
@@ -119,11 +118,10 @@ void setup() {
 
   GEOFENCE_position(lat, lng);
 
-  //Serial2.begin(9600, SERIAL_8N1, gpsRXPin, gpsTXPin);  // 9600, 5, 4
+  Serial2.begin(9600, SERIAL_8N1, gpsRXPin, gpsTXPin);  // 9600, 3
 
   if(!LittleFS.begin(true)){
     Serial.println("LittleFS mount failed!");
-    while(true) delay(1000); // halt visibly
   }
   Serial.println("LittleFS mounted OK");
 
@@ -146,20 +144,13 @@ void loop() {
             
 		}
 	} 
-
-  lng = lng + 0.00002;
-  if (lng > 170){
-    lng = 0;
-    lat = lat + 0.0001;
-  }
-
-
-  //RXfinishedimages(savedImages); // recieve finished image packets and update remaining packets (if recieved)
+  
 
   if ((millis() - lastprefsupdatetime) >= updateprefs){
     prefs.putBytes("remain", savedImages, sizeof(savedImages));
     lastprefsupdatetime = millis();
   }
+
 
   if ((millis() - lastIMGTime) >= IMG_interval){
     // dont need to check for free image slot as it will be discarded if no slot available
@@ -174,6 +165,7 @@ void loop() {
       lastIMGTime = millis(); // wait full interval until next image
     }
   }
+  
 
   if ((lastquality == 0) && (quality == 1) && (millis() > 20000)){
     // when we enter a high quality area, take image
@@ -211,13 +203,13 @@ void loop() {
       lastTxTime = millis(); // Reset timer
 
       if ((counter % (telempacketinterval * 2)) == 0) { // do half and half 2m/lora for telem packets
-        //transmit_2m(callsign, destination, latitudechars, longitudechars, telemmsg);
+        transmit_2m(callsign, destination, latitudechars, longitudechars, telemmsg);
         Serial.print(telemmsg);
         Serial.println(" :2m payload");
         counter++;
       } 
       else {
-        //transmit_lora(callsign, destination, latitudechars, longitudechars, telemmsg);
+        transmit_lora(callsign, destination, latitudechars, longitudechars, telemmsg);
         Serial.print(telemmsg);
         Serial.println(" :lora payload");
         counter++;
@@ -250,23 +242,29 @@ void loop() {
         // bytes 0-52 are already filled (53 bytes)
         packetData[53] = identifier;
 
-        char outputBuffer[68]; // max is 67 chars   \o_     _o/      \o_     _o/  last byte for termiantor
+        char outputBuffer[72]; // max is 67 chars   \o_     _o/      \o_     _o/  with a little extra
         encodeBase91(packetData, sizeof(packetData), outputBuffer);
 
         lastTxTime = millis(); // Reset timer
-        // transmit_2m(callsign, destination, latitudechars, longitudechars, outputBuffer);
+        transmit_2m(callsign, destination, latitudechars, longitudechars, outputBuffer);
+
         Serial.printf("%s, %s, %s", latitudechars, longitudechars, outputBuffer);
         Serial.println();
 
-        //if (receptionlocation(lat, lng)){
-        //  savedImages[filenum]--; // if pretty sure packet recieved, decrement remaining for that image (mostly a fallback from rx packets)
-        //}
+        if (receptionlocation(lat, lng)){
+        savedImages[filenum]--; // if pretty sure packet recieved, decrement remaining for that image
+        }
+
+        if (savedImages[filenum] == 0){
+          LittleFS.remove(accessfilebuf);
+          }
 
         counter++;
       }
       else{
         Serial.print("encode failed");
         Serial.println(filenum);
+        counter++; // so if critically broken it can still do telem
       }
     }
   }
