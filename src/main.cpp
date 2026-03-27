@@ -14,7 +14,7 @@
 
 
 // send a telemetry packet every x packets (alternating lora and 2m)
-const unsigned telempacketinterval = 20;
+const unsigned telempacketinterval = 5;
 
 // send a packet every 5 seconds (5000ms)
 const unsigned long TX_INTERVAL = 5000;
@@ -45,7 +45,13 @@ char longitudechars[] = "00000.00E";
 char messagelora[] = "placeholder";
 char message2m[] = "placeholder";
 
-
+// debug error flags for telem
+bool littlfserr = 0;
+bool prefserr = 0;
+bool gpserr = 1;
+bool encodererr = 0;
+bool camcaptureerr = 0;
+bool caminiterr = 0;
 
 
 unsigned long lastTxTime = 0;
@@ -85,16 +91,54 @@ void setup() {
   delay(1000); 
   digitalWrite(33, HIGH);
 
-  StartCamera();
+  bool cameraReady = false;
+  int initRetries = 0;
 
-    // Flush warm-up frames so the first real capture is valid
-  for (int i = 0; i < 3; i++) {
-      camera_fb_t *warmup = esp_camera_fb_get();
-      if (warmup) esp_camera_fb_return(warmup);
-      delay(300);
+  resetCamera();
+
+  // 1. Retry loop for initialization
+  while (!cameraReady && initRetries < 20) {  
+      if (StartCamera() == ESP_OK) { 
+        // 2. Robust warm-up sequence
+        int targetWarmupFrames = 5; 
+        int successfulFrames = 0;
+        int maxAttempts = 15; // Timeout threshold
+        int attemptCount = 0;
+
+        while (successfulFrames < targetWarmupFrames && attemptCount < maxAttempts) {
+            camera_fb_t *warmup = esp_camera_fb_get();
+            
+            if (warmup) {
+                esp_camera_fb_return(warmup);
+                successfulFrames++;
+            } else {
+                Serial.println("Warm-up frame capture failed.");
+            }
+            
+            attemptCount++;
+            delay(200); 
+        }
+
+        cameraReady = true; 
+        Serial.println("Camera initialized and ready.");
+
+      } else {
+          Serial.println("Camera init failed, retrying in 1s...");
+          esp_camera_deinit();
+          resetCamera();
+          initRetries++;
+      }
   }
-  Serial.println("Camera warm-up complete");
 
+  // Optional: Catch a total failure after 20 attempts
+  if (!cameraReady) {
+      Serial.println("Fatal error: Camera failed to initialize after 20 attempts.");
+      caminiterr = 1;
+
+      // ESP.restart();  not including because if would disable tracker if camera broke
+  }
+
+  
   uint8_t *frame;
   size_t   frame_len;
 
@@ -104,6 +148,7 @@ void setup() {
   if (savedimagesize == 0) {
     memset(savedImages, 0, sizeof(savedImages));
     prefs.putBytes("remain", savedImages, sizeof(savedImages));
+    prefserr = 1;
   }
 
   size_t versionSize = prefs.getBytes("version", imageVersion, sizeof(imageVersion));
@@ -111,6 +156,7 @@ void setup() {
   if (versionSize == 0) {
     memset(imageVersion, 0, sizeof(imageVersion));
     prefs.putBytes("version", imageVersion, sizeof(imageVersion));
+    prefserr = 1;
   }
   
 
@@ -122,6 +168,7 @@ void setup() {
 
   if(!LittleFS.begin(true)){
     Serial.println("LittleFS mount failed!");
+    littlfserr = 1;
   }
   Serial.println("LittleFS mounted OK");
 
@@ -141,6 +188,7 @@ void loop() {
               hour, minute, second, centisecond,
               alt, speed_kmh, course_deg,
               sats, hdop);
+        gpserr = 0;
             
 		}
 	} 
@@ -213,7 +261,6 @@ void loop() {
         Serial.print(telemmsg);
         Serial.println(" :lora payload");
         counter++;
-      
       }
     }
 
@@ -264,6 +311,7 @@ void loop() {
       else{
         Serial.print("encode failed");
         Serial.println(filenum);
+        encodererr = 1;
         counter++; // so if critically broken it can still do telem
       }
     }

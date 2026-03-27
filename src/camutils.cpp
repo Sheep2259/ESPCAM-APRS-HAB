@@ -140,7 +140,7 @@ uint8_t imageVersion[16];
 // Initialises the camera hardware.
 // Call once from setup(). Halts with Serial errors on failure.
 // -------------------------------------------------------
-void StartCamera() {
+esp_err_t StartCamera() {
     camera_config_t config;
 
     config.ledc_channel = LEDC_CHANNEL_0;
@@ -188,33 +188,17 @@ void StartCamera() {
      *   FRAMESIZE_QXGA   (2048x1536) -- 3MP+ sensors only
      */
 
-#if defined(CAMERA_MODEL_ESP_EYE)
-    // ESP-EYE button GPIOs need pull-ups or the camera misbehaves
-    pinMode(13, INPUT_PULLUP);
-    pinMode(14, INPUT_PULLUP);
-#endif
 
     esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK) {
         Serial.printf("CRITICAL: Camera init failed with error 0x%x\n", err);
         Serial.println("A full power cycle (off/on) may be needed to recover.");
-        while (true) {
-            Serial.println("Camera init failed — halted.");
-            delay(5000);
-        }
+        return err;
     }
-
-    Serial.println("Camera init succeeded");
 
     // Optional: tweak sensor defaults after init
     sensor_t *s = esp_camera_sensor_get();
 
-    // OV3660 comes out flipped and over-saturated from the factory
-    if (s->id.PID == OV3660_PID) {
-        s->set_vflip(s, 1);
-        s->set_brightness(s, 1);
-        s->set_saturation(s, -2);
-    }
 
     // Uncomment and adjust any of these to change default image properties:
     // s->set_framesize(s,  FRAMESIZE_VGA);
@@ -228,7 +212,28 @@ void StartCamera() {
     // s->set_awb_gain(s,    1);       // 0=off 1=on
     // s->set_exposure_ctrl(s, 1);     // AEC: 0=off 1=on
     // s->set_gain_ctrl(s,   1);       // AGC: 0=off 1=on
+
+
+    Serial.println("Camera init succeeded");
+    return err;
 }
+
+
+
+void resetCamera() {
+  pinMode(PWDN_GPIO_NUM, OUTPUT);
+  
+  // Pull PWDN high to power down the camera
+  digitalWrite(PWDN_GPIO_NUM, HIGH);
+  delay(500);
+  
+  // Pull PWDN low to power up the camera and reset state
+  digitalWrite(PWDN_GPIO_NUM, LOW);
+  delay(500);
+}
+
+
+
 
 // -------------------------------------------------------
 // captureJpeg()

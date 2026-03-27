@@ -33,7 +33,8 @@ bool validateJpegFile(const char* filename);
 // -----------------------------------------------------------------
 esp_err_t savePhoto(uint8_t quality, double lat, double lng, float alt, const char* timeStr);
 int IMGnToTX(uint16_t savedImages[]);
-void StartCamera();
+esp_err_t StartCamera();
 camera_fb_t* captureJpeg();
+void resetCamera();
 
 #endif
