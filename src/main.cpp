@@ -14,13 +14,13 @@
 
 
 // send a telemetry packet every x packets (alternating lora and 2m)
-const unsigned telempacketinterval = 5;
+const unsigned telempacketinterval = 20;
 
-// send a packet every 5 seconds (5000ms)
-const unsigned long TX_INTERVAL = 5000;
+// send a packet every 6 seconds (6000ms)
+const unsigned long TX_INTERVAL = 6000;
 
-// take and store an image every 1 hour (3600000ms)
-const unsigned long IMG_interval  = 3600000;
+// base image store interval, 4 hours (14400000ms), subject to location
+const unsigned long IMG_interval  = 14400000;
 
 // sync remaining packets to preferences (flash) every 10 mins
 const unsigned updateprefs = 600000;
@@ -29,12 +29,10 @@ const unsigned updateprefs = 600000;
 
 uint32_t counter = 0;
 
-float lat = 0.0f, lng = 0.0f, age_s = 3600.0f, hdop = 0.0f;
+float lat = 0.0f, lng = 0.0f, age_s = 3600.0f, hdop = 26.0f;
 float alt = 0.0f, speed_kmh = 0.0f, course_deg = 0.0f;
 uint16_t year = 0;
 uint8_t month = 0, day = 0, hour = 0, minute = 0, second = 9, centisecond = 0, sats = 0;
-
-uint16_t enc_alt = 80, enc_speed = 0, enc_hdop = 0, enc_bat = 1, enc_pv = 1;
 
 
 // default aprs packet, variables change when we have more data like gps
@@ -42,8 +40,7 @@ char callsign[] = "M7CWV";
 char destination[] = "APRS";
 char latitudechars[] = "0000.00N";
 char longitudechars[] = "00000.00E";
-char messagelora[] = "placeholder";
-char message2m[] = "placeholder";
+
 
 // debug error flags for telem
 bool littlfserr = 0;
@@ -53,6 +50,7 @@ bool encodererr = 0;
 bool camcaptureerr = 0;
 bool caminiterr = 0;
 
+uint8_t errorflags;
 
 unsigned long lastTxTime = 0;
 unsigned long lastIMGTime = 0;
@@ -164,7 +162,7 @@ void setup() {
 
   GEOFENCE_position(lat, lng);
 
-  Serial2.begin(9600, SERIAL_8N1, gpsRXPin, gpsTXPin);  // 9600, 3
+  Serial2.begin(9600, SERIAL_8N1, gpsRXPin, -1);  // 9600, 3
 
   if(!LittleFS.begin(true)){
     Serial.println("LittleFS mount failed!");
@@ -203,19 +201,30 @@ void loop() {
   if ((millis() - lastIMGTime) >= IMG_interval){
     // dont need to check for free image slot as it will be discarded if no slot available
     snprintf(timestampchars, sizeof(timestampchars), "%d/%d/%d/%d/%d", month, day, hour, minute, second);
+    quality = locationQuality(lat, lng);
 
     if (quality == 1){
       savePhoto(1, lat, lng, alt, timestampchars);
-      lastIMGTime = (millis() - (IMG_interval/2)); // wait half interval until next image
+      if (receptionlocation(lat, lng)){
+        lastIMGTime = (millis() - (IMG_interval * (3/4))); // wait 1/4 interval until next image 
+      }
+      else{
+        lastIMGTime = (millis() - (IMG_interval/2)); // wait half interval until next image 
+      }
     }
     else{
       savePhoto(0, lat, lng, alt, timestampchars);
-      lastIMGTime = millis(); // wait full interval until next image
+      if (receptionlocation(lat, lng)){
+        lastIMGTime = (millis() - (IMG_interval/2)); // wait half interval until next image 
+      }
+      else{
+        lastIMGTime = (millis() - (IMG_interval)); // wait full interval until next image 
+      }
     }
   }
   
 
-  if ((lastquality == 0) && (quality == 1) && (millis() > 20000)){
+  if ((lastquality == 0) && (quality == 1) && (millis() > 60000) && (hdop < 10)){
     // when we enter a high quality area, take image
     snprintf(timestampchars, sizeof(timestampchars), "%d/%d/%d/%d/%d", month, day, hour, minute, second);
     esp_err_t result = savePhoto(1, lat, lng, alt, timestampchars);
@@ -226,7 +235,12 @@ void loop() {
         Serial.printf("savedImages[%d] = %d\n", i, savedImages[i]);
     }
     lastquality = 1; // so that it doesnt keep taking images
-    lastIMGTime = (millis() - (IMG_interval/2)); // wait half interval until next image
+    if (receptionlocation(lat, lng)){
+        lastIMGTime = (millis() - (IMG_interval * (3/4))); // wait 1/4 interval until next image 
+      }
+      else{
+        lastIMGTime = (millis() - (IMG_interval/2)); // wait half interval until next image 
+      }
   }
 
 
@@ -245,8 +259,10 @@ void loop() {
 
 
     if ((counter % telempacketinterval) == 0){
-      snprintf(telemmsg, sizeof(telemmsg), "T:%d/%d/%d/%d/%dP:%.0f/%.0f/%d/%.1fS:%d", 
-        month, day, hour, minute, second, alt, speed_kmh, sats, hdop, counter); // about 45 chars used
+      errorflags = packBools(gpserr, caminiterr, camcaptureerr, littlfserr, prefserr, encodererr, 0, 0);
+
+      snprintf(telemmsg, sizeof(telemmsg), "T%d/%d/%d/%d/%dP%.0f/%.0f/%d/%.1fS%dE%02X", 
+        month, day, hour, minute, second, alt, speed_kmh, sats, hdop, counter, errorflags); // about 45 chars used
 
       lastTxTime = millis(); // Reset timer
 

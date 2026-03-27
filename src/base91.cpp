@@ -88,44 +88,16 @@ void aprsFormatLng(float lon, char* buf, size_t bufSize) {
   snprintf(buf, bufSize, "%03d%02d.%02d%c", deg, wholeMin, frac, hemi);
 }
 
-
-
-float truncParseLat(const char* buf) {
-    int deg;
-    float min;
-    char hemi;
-
-    // Parse: 2 digits for degrees, float for minutes, char for hemisphere
-    // Example: "5130.50N" -> deg=51, min=30.50, hemi='N'
-    if (sscanf(buf, "%2d%f%c", &deg, &min, &hemi) < 3) {
-        return 0.0f; // Error handling
-    }
-
-    float lat = (float)deg + (min / 60.0f);
-
-    if (hemi == 'S') {
-        lat = -lat;
-    }
-
-    return lat;
-}
-
-float truncParseLng(const char* buf) {
-    int deg;
-    float min;
-    char hemi;
-
-    // Parse: 3 digits for degrees, float for minutes, char for hemisphere
-    // Example: "00005.12W" -> deg=0, min=5.12, hemi='W'
-    if (sscanf(buf, "%3d%f%c", &deg, &min, &hemi) < 3) {
-        return 0.0f; // Error handling
-    }
-
-    float lon = (float)deg + (min / 60.0f);
-
-    if (hemi == 'W') {
-        lon = -lon;
-    }
-
-    return lon;
+// Packs 8 booleans into a single byte (LSB to MSB)
+uint8_t packBools(bool b0, bool b1, bool b2, bool b3, bool b4, bool b5, bool b6, bool b7) {
+    uint8_t packed = 0;
+    packed |= (b0 << 0);
+    packed |= (b1 << 1);
+    packed |= (b2 << 2);
+    packed |= (b3 << 3);
+    packed |= (b4 << 4);
+    packed |= (b5 << 5);
+    packed |= (b6 << 6);
+    packed |= (b7 << 7);
+    return packed;
 }
