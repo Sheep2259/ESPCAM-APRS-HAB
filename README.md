@@ -1,30 +1,18 @@
-# HAB Tracker — High Altitude Balloon Flight Computer
+# HAB Tracker - High Altitude Balloon Flight Computer
 
-An ESP32-CAM based flight computer for high altitude balloon (HAB) missions. It transmits live APRS telemetry and position packets over both 2m FM (AFSK AX.25) and LoRa, captures JPEG images at altitude, and sends them back to the ground using a custom erasure-coded radio protocol — all while automatically adapting its radio parameters to local regulations worldwide.
+ESP32-CAM flight computer for HAB missions. Transmits APRS telemetry over 2m AFSK (AX.25) and LoRa, captures JPEGs at altitude, and downlinks them using GF(2^8) RLNC erasure coding. Radio parameters are selected automatically by geofence.
 
 ---
 
 ## Features
 
-### Dual-Radio APRS Transmissions
-Alternates between 2m AFSK (using RadioLib's AX.25/APRS stack) and LoRa APRS via a single SX1278 module. Frequency, spreading factor, and coding rate are all selected automatically based on the balloon's GPS coordinates.
+**Dual-radio APRS** - Alternates between 2m AFSK via RadioLib's AX.25 stack and LoRa APRS on a single SX1278. Frequency, SF, and coding rate are chosen by GPS position to match local band plans (Europe, Americas, China, Japan, Australia/NZ, etc.).
 
-### Worldwide Geofencing
-A point-in-polygon engine covers most of the world's APRS frequency plans — Europe, the Americas, China, Japan, Australia, New Zealand, and more. The correct 2m and LoRa APRS frequencies are picked in real time as the balloon drifts across regions.
+**RLNC image transport** - Each TX sends a GF(2^8) random linear combination of all 53-byte blocks of a stored JPEG rather than sequential chunks. Coefficients are seeded from the balloon's APRS coordinate strings for implicit metadata and reproducible vectors; payloads are base91-encoded for compact APRS message bodies. The ground station can reconstruct from any sufficient set of linearly independent packets.
 
-### Image Capture and Transmission
-The OV2640 camera takes JPEG images periodically and whenever the balloon enters a predefined "interesting" geographic zone (coastlines, mountain ranges, famous landmarks, etc). Up to 16 images can be queued in LittleFS flash storage, each tracked with a remaining-packet counter that persists across reboots via NVS Preferences.
+**Reception-aware accounting** - When over a known iGate coverage area (continental Europe, UK, coastal USA, Japan, eastern China, Scandinavia), ACKs parsed from downlinked LoRa packets decrement each image's remaining-packet counter. Images are deleted from LittleFS once fully acknowledged. Counters persist across reboots via NVS Preferences.
 
-### RLNC Erasure-Coded Image Transport
-Rather than sending raw image chunks sequentially, each transmission sends a GF(2⁸) random linear combination of all 53-byte blocks of a stored JPEG. The receiver can reconstruct the original image from any sufficiently large set of received coded packets, regardless of order or gaps — making it well suited to the lossy, intermittent links typical of balloon-to-ground radio.
-
-Packet coefficients are seeded from the balloon's APRS-formatted coordinates, providing implicit metadata and reproducible coefficient vectors. Encoded packets are serialised to base91 for compact APRS message payloads.
-
-### Reception-Aware Packet Accounting
-A geofence layer maps known APRS iGate coverage areas (continental Europe, the UK, coastal USA, Japan, eastern China, Scandinavia). When over a covered area, received-packet acknowledgements are parsed from downlinked LoRa packets and the remaining-packet counter for each image is decremented. Images are deleted from flash once fully acknowledged.
-
-### Quality Zones
-A configurable list of polygons covering visually interesting regions triggers a high-priority image capture on zone entry, with a shortened inter-image interval for the subsequent orbit.
+**Quality zones** - Configurable polygons over visually interesting regions trigger a high-priority capture on zone entry and shorten the inter-image interval for the next orbit.
 
 ---
 
@@ -32,11 +20,9 @@ A configurable list of polygons covering visually interesting regions triggers a
 
 | Component | Details |
 |---|---|
-| ESP32-CAM (AI-Thinker) | Main processor, PSRAM, OV2640 camera, LittleFS on-chip flash |
-| SX1278 LoRa transceiver | Connected via SPI, used for both LoRa and 2m AFSK via RadioLib |
-| GPS module | NMEA at 9600 baud, parsed with TinyGPS+ |
-
----
+| ESP32-CAM (AI-Thinker) | Main processor, PSRAM, OV2640, LittleFS |
+| SX1278 | SPI, handles both LoRa and 2m AFSK via RadioLib |
+| GPS module | NMEA 9600 baud, TinyGPS+ |
 
 ## Dependencies
 
@@ -50,39 +36,38 @@ A configurable list of polygons covering visually interesting regions triggers a
 
 | File | Purpose |
 |---|---|
-| `main.cpp` | Main loop — GPS, scheduling, image capture, packet dispatch |
-| `radio.cpp` / `radio.h` | Transmit helpers, LoRa RX, packet accounting |
-| `geofence.cpp` / `geofence.h` | Worldwide APRS frequency geofencing |
-| `quality.cpp` / `quality.h` | Interesting-location zone detection |
-| `LinearErasureCoder.cpp` / `.h` | GF(2⁸) RLNC encoder |
+| `main.cpp` | Main loop: GPS, scheduling, image capture, packet dispatch |
+| `radio.cpp` / `.h` | TX helpers, LoRa RX, packet accounting |
+| `geofence.cpp` / `.h` | Worldwide APRS frequency geofencing |
+| `quality.cpp` / `.h` | Interesting-zone detection |
+| `LinearErasureCoder.cpp` / `.h` | GF(2^8) RLNC encoder |
 | `LEC_tables.h` | Pre-computed GF log/exp tables |
-| `base91.cpp` / `base91.h` | Base91 encoding + APRS lat/lng formatting |
-| `camutils.cpp` / `camutils.h` | Camera init, JPEG capture, LittleFS storage |
-| `GPS.cpp` / `GPS.h` | TinyGPS+ wrapper |
+| `base91.cpp` / `.h` | Base91 + APRS lat/lng formatting |
+| `camutils.cpp` / `.h` | Camera init, JPEG capture, LittleFS storage |
+| `GPS.cpp` / `.h` | TinyGPS+ wrapper |
 | `pin_defs.h` | GPIO assignments |
 
 ---
 
 ## Configuration
 
-Key timing and behavioural constants are defined at the top of `main.cpp`:
+Timing constants at the top of `main.cpp`:
 
 ```cpp
 const unsigned telempacketinterval = 20;       // Telemetry packet every N packets
-const unsigned long TX_INTERVAL     = 5000;    // Transmit every 5 seconds (ms)
-const unsigned long IMG_interval    = 3600000; // Capture image every 1 hour (ms)
-const unsigned updateprefs          = 600000;  // Sync counters to flash every 10 min (ms)
+const unsigned long TX_INTERVAL     = 5000;    // ms between transmissions
+const unsigned long IMG_interval    = 3600000; // ms between image captures
+const unsigned updateprefs          = 600000;  // ms between NVS counter syncs
 ```
 
-Pin assignments for the SX1278 and GPS module are in `pin_defs.h`.
+Pin assignments for the SX1278 and GPS in `pin_defs.h`.
 
 ---
 
-## How Image Transmission Works
+## Image TX Flow
 
-1. The camera captures a JPEG and saves it to LittleFS with a metadata trailer containing GPS coordinates and timestamp.
-2. A packet counter is assigned to the image (default: number of encoded packets to send before considering it complete).
-3. On each transmit cycle, the RLNC encoder reads the stored JPEG and produces a 53-byte coded packet seeded by the current APRS position strings and a random identifier byte.
-4. The 54-byte payload (53 data + 1 identifier) is base91-encoded and sent as an APRS message body.
-5. If the balloon is over a known iGate coverage area, the packet counter is decremented on transmission. When the counter reaches zero, the file is deleted from flash.
-6. The ground station can reconstruct the image once it has received enough linearly independent coded packets.
+1. JPEG saved to LittleFS with GPS/timestamp metadata trailer; packet counter assigned.
+2. Each TX cycle: RLNC encoder produces a 53-byte coded packet seeded by current APRS position strings + random identifier byte.
+3. 54-byte payload base91-encoded, sent as APRS message body.
+4. Counter decremented on ACK (if over iGate coverage). File deleted at zero.
+5. Ground station reconstructs once it holds enough linearly independent packets.

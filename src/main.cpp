@@ -16,8 +16,8 @@
 // send a telemetry packet every x packets (alternating lora and 2m)
 const unsigned telempacketinterval = 20;
 
-// send a packet every 6 seconds (6000ms)
-const unsigned long TX_INTERVAL = 6000;
+// send a packet every 10 seconds (10000ms)
+const unsigned long TX_INTERVAL = 10000;
 
 // base image store interval, 4 hours (14400000ms), subject to location
 const unsigned long IMG_interval  = 14400000;
@@ -181,13 +181,15 @@ void loop() {
 
 	while (Serial2.available() > 0) {
 		if (gps.encode(Serial2.read())) {
-			  UpdateGPSInfo(lat, lng, age_s,
+			UpdateGPSInfo(lat, lng, age_s,
               year, month, day,
               hour, minute, second, centisecond,
               alt, speed_kmh, course_deg,
               sats, hdop);
+              
+      if (hdop < 20){
         gpserr = 0;
-            
+      }     
 		}
 	} 
   
@@ -283,6 +285,13 @@ void loop() {
     else {
       //transmit image packet
 
+      if (hdop > 20){
+          gpserr = 1;
+          counter++; // only telem if no gps
+          lastTxTime = millis(); // dont want to send telem every 10s if cam broken, no point
+          return;
+      }
+
       int filenum = IMGnToTX(savedImages);
       if (filenum == -1){
           Serial.println("no packets to send");
@@ -328,6 +337,7 @@ void loop() {
         Serial.print("encode failed");
         Serial.println(filenum);
         encodererr = 1;
+        lastTxTime = millis();
         counter++; // so if critically broken it can still do telem
       }
     }
