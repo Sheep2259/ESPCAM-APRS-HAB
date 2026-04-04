@@ -19,7 +19,7 @@ void transmit_2m(char callsign[], char destination[], char latitude[], char long
     return;
   }
   // initialize SX1278 for 2m APRS
-  int beginfskstate = radio.beginFSK(GEOFENCE_2mAPRS_frequency);
+  int beginfskstate = radio.beginFSK(GEOFENCE_2mAPRS_frequency, 4.8F, 5.0F, 125.0F, 13);
 
   // initialize AX.25 client
   // source station SSID:         0
@@ -28,12 +28,12 @@ void transmit_2m(char callsign[], char destination[], char latitude[], char long
   
 
   // initialize APRS client
-  // symbol: '>' (car)
-  int aprsbeginstate = aprs.begin('>');
+  // symbol: 'O' (balloon)
+  int aprsbeginstate = aprs.begin('O');
 
   int sendstate = aprs.sendPosition(destination, 0, latitude, longitude, message);
 
-  setup_lora_rx(); // back to listening
+  //setup_lora_rx(); // back to listening
 }
 
 
@@ -51,18 +51,18 @@ void transmit_lora(char callsign[], char destination[], char latitude[], char lo
   int radiobeginstate = radio.begin(GEOFENCE_loraAPRS_frequency, 125, GEOFENCE_loraAPRS_sf, GEOFENCE_loraAPRS_cr);
 
   // initialize APRS client
-  // symbol:                      '>' (car)
-  // callsign                     "N7CWV"
+  // symbol:                      'O' (balloon)
+  // callsign                     "M7CWV"
   // SSID                         4
-  int loraaprsstate = loraaprs.begin('>', callsign, 4);
+  int loraaprsstate = loraaprs.begin('O', callsign, 4);
 
   // SSID is set to 1, as APRS over LoRa uses WIDE1-1 path by default
   int state = loraaprs.sendPosition(destination, 1, latitude, longitude, message);
 
-  setup_lora_rx(); // back to listening
+  //setup_lora_rx(); // back to listening
 }
 
-
+/*
 void setup_lora_rx() {
   // 1. Initialize Radio in LoRa mode using your existing constants
   int state = radio.begin(GEOFENCE_loraAPRS_frequency, 125, GEOFENCE_loraAPRS_sf, GEOFENCE_loraAPRS_cr);
@@ -154,7 +154,7 @@ bool processRXpacket(String message, uint16_t* savedImages) {
 
   return true;
 }
-
+*/
 
 // zones where reception is near garanteed
 

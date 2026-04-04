@@ -6,96 +6,6 @@
 
 Preferences prefs;
 
-// -------------------------------------------------------
-// validateJpegBuffer()
-// Checks that a buffer in RAM is a well-formed JPEG:
-//   • Starts with SOI marker  FF D8
-//   • Contains an EOI marker  FF D9 within the last 32 bytes
-//
-// Call this on the raw camera framebuffer before writing to flash.
-// Returns true if the JPEG looks intact.
-// -------------------------------------------------------
-bool validateJpegBuffer(const uint8_t* buf, size_t len) {
-    if (len < 4) {
-        Serial.printf("validateJpegBuffer: too small (%u bytes)\n", (unsigned)len);
-        return false;
-    }
-    // JPEG SOI
-    if (buf[0] != 0xFF || buf[1] != 0xD8) {
-        Serial.printf("validateJpegBuffer: bad SOI bytes: %02X %02X\n", buf[0], buf[1]);
-        return false;
-    }
-    // JPEG EOI must appear somewhere in the last 32 bytes
-    size_t scanFrom = (len >= 32) ? len - 32 : 0;
-    for (size_t i = scanFrom; i < len - 1; i++) {
-        if (buf[i] == 0xFF && buf[i + 1] == 0xD9) return true;
-    }
-    Serial.println("validateJpegBuffer: no EOI marker found");
-    return false;
-}
-
-// -------------------------------------------------------
-// validateJpegFile()
-// Re-reads a saved file from LittleFS and checks:
-//   • Starts with SOI  FF D8
-//   • Contains an EOI  FF D9 somewhere in the final 300 bytes
-//     (before the appended ||META: block)
-//
-// The tail scan covers the last 300 bytes of the file, which
-// is well beyond the ~80-byte metadata trailer.
-// Returns true if the file appears to be a valid JPEG.
-// -------------------------------------------------------
-bool validateJpegFile(const char* filename) {
-    File f = LittleFS.open(filename, "r");
-    if (!f) {
-        Serial.printf("validateJpegFile: cannot open %s\n", filename);
-        return false;
-    }
-    size_t fileSize = f.size();
-    if (fileSize < 4) {
-        Serial.printf("validateJpegFile: file too small (%u bytes)\n", (unsigned)fileSize);
-        f.close();
-        return false;
-    }
-
-    // --- Check SOI at start ---
-    uint8_t header[3] = {0};
-    if (f.read(header, 3) != 3 || header[0] != 0xFF || header[1] != 0xD8) {
-        Serial.printf("validateJpegFile: bad SOI in %s (%02X %02X)\n",
-                      filename, header[0], header[1]);
-        f.close();
-        return false;
-    }
-
-    // --- Scan tail for EOI ---
-    // Read up to 300 bytes from near the end.
-    // This sits past any real JPEG data and before/within the metadata trailer.
-    const size_t TAIL_WINDOW = 200;
-    size_t scanFrom = (fileSize > TAIL_WINDOW) ? fileSize - TAIL_WINDOW : 3;
-    if (!f.seek(scanFrom)) {
-        Serial.printf("validateJpegFile: seek failed in %s\n", filename);
-        f.close();
-        return false;
-    }
-
-    uint8_t prev = 0;
-    bool foundEOI = false;
-    while (f.available()) {
-        uint8_t b = (uint8_t)f.read();
-        if (prev == 0xFF && b == 0xD9) {
-            foundEOI = true;
-            break;
-        }
-        prev = b;
-    }
-
-    f.close();
-    if (!foundEOI) {
-        Serial.printf("validateJpegFile: no EOI marker in tail of %s\n", filename);
-    }
-    return foundEOI;
-}
-
 // savedImages array contains the remaining packets required for complete transmission
 // default is 0 for nonexistent images, when remaining packets are decremented to 0 it is safe to overwrite
 uint16_t savedImages[16];
@@ -246,18 +156,43 @@ void resetCamera() {
 camera_fb_t* captureJpeg() {
     camera_fb_t *fb = nullptr;
 
-    // Retry up to 3 times with increasing delay — sensor may need time at large resolutions
-    for (int attempt = 0; attempt < 3; attempt++) {
-        fb = esp_camera_fb_get();
-        if (fb) break;
-        Serial.printf("captureJpeg: attempt %d failed, retrying...\n", attempt + 1);
-        delay(500 * (attempt + 1));  // 500ms, 1000ms, 1500ms
+    for (int cycle = 0; cycle < 5; cycle++) {
+        // Attempt to grab a frame, 2 retries per cycle
+        for (int attempt = 0; attempt < 2; attempt++) {
+            fb = esp_camera_fb_get();
+            if (fb) break;
+            Serial.printf("captureJpeg: cycle %d, attempt %d failed, retrying...\n", cycle + 1, attempt + 1);
+            delay(200);
+        }
+
+        if (fb) break; // Got a frame, no need to reinit
+
+        // No frame after retries — reinitialise the camera
+        Serial.printf("captureJpeg: cycle %d failed, reinitialising camera...\n", cycle + 1);
+        esp_camera_deinit();
+        resetCamera();
+
+        int warmupFrames = 0;
+        if (StartCamera() == ESP_OK) {
+            // Warm-up sequence after reinit
+            for (int w = 0; w < 15 && warmupFrames < 3; w++) {
+                camera_fb_t *warmup = esp_camera_fb_get();
+                if (warmup) {
+                    esp_camera_fb_return(warmup);
+                    warmupFrames++;
+                }
+                delay(200);
+            }
+            Serial.println("captureJpeg: camera reinitialised.");
+        } else {
+            Serial.println("captureJpeg: camera reinit failed.");
+        }
     }
 
     if (!fb) {
         Serial.printf("captureJpeg failed — heap free: %u, PSRAM free: %u\n",
                       ESP.getFreeHeap(), ESP.getFreePsram());
-        Serial.println("captureJpeg: failed to acquire frame");
+        Serial.println("captureJpeg: failed to acquire frame after all cycles.");
         return nullptr;
     }
 
@@ -467,4 +402,96 @@ int IMGnToTX(uint16_t savedImages[]) {
 
   // Fallback (in case of floating point rounding errors)
   return validItems[count - 1].index;
+}
+
+
+
+// -------------------------------------------------------
+// validateJpegBuffer()
+// Checks that a buffer in RAM is a well-formed JPEG:
+//   • Starts with SOI marker  FF D8
+//   • Contains an EOI marker  FF D9 within the last 32 bytes
+//
+// Call this on the raw camera framebuffer before writing to flash.
+// Returns true if the JPEG looks intact.
+// -------------------------------------------------------
+bool validateJpegBuffer(const uint8_t* buf, size_t len) {
+    if (len < 4) {
+        Serial.printf("validateJpegBuffer: too small (%u bytes)\n", (unsigned)len);
+        return false;
+    }
+    // JPEG SOI
+    if (buf[0] != 0xFF || buf[1] != 0xD8) {
+        Serial.printf("validateJpegBuffer: bad SOI bytes: %02X %02X\n", buf[0], buf[1]);
+        return false;
+    }
+    // JPEG EOI must appear somewhere in the last 32 bytes
+    size_t scanFrom = (len >= 32) ? len - 32 : 0;
+    for (size_t i = scanFrom; i < len - 1; i++) {
+        if (buf[i] == 0xFF && buf[i + 1] == 0xD9) return true;
+    }
+    Serial.println("validateJpegBuffer: no EOI marker found");
+    return false;
+}
+
+// -------------------------------------------------------
+// validateJpegFile()
+// Re-reads a saved file from LittleFS and checks:
+//   • Starts with SOI  FF D8
+//   • Contains an EOI  FF D9 somewhere in the final 300 bytes
+//     (before the appended ||META: block)
+//
+// The tail scan covers the last 300 bytes of the file, which
+// is well beyond the ~80-byte metadata trailer.
+// Returns true if the file appears to be a valid JPEG.
+// -------------------------------------------------------
+bool validateJpegFile(const char* filename) {
+    File f = LittleFS.open(filename, "r");
+    if (!f) {
+        Serial.printf("validateJpegFile: cannot open %s\n", filename);
+        return false;
+    }
+    size_t fileSize = f.size();
+    if (fileSize < 4) {
+        Serial.printf("validateJpegFile: file too small (%u bytes)\n", (unsigned)fileSize);
+        f.close();
+        return false;
+    }
+
+    // --- Check SOI at start ---
+    uint8_t header[3] = {0};
+    if (f.read(header, 3) != 3 || header[0] != 0xFF || header[1] != 0xD8) {
+        Serial.printf("validateJpegFile: bad SOI in %s (%02X %02X)\n",
+                      filename, header[0], header[1]);
+        f.close();
+        return false;
+    }
+
+    // --- Scan tail for EOI ---
+    // Read up to 300 bytes from near the end.
+    // This sits past any real JPEG data and before/within the metadata trailer.
+    const size_t TAIL_WINDOW = 200;
+    size_t scanFrom = (fileSize > TAIL_WINDOW) ? fileSize - TAIL_WINDOW : 3;
+    if (!f.seek(scanFrom)) {
+        Serial.printf("validateJpegFile: seek failed in %s\n", filename);
+        f.close();
+        return false;
+    }
+
+    uint8_t prev = 0;
+    bool foundEOI = false;
+    while (f.available()) {
+        uint8_t b = (uint8_t)f.read();
+        if (prev == 0xFF && b == 0xD9) {
+            foundEOI = true;
+            break;
+        }
+        prev = b;
+    }
+
+    f.close();
+    if (!foundEOI) {
+        Serial.printf("validateJpegFile: no EOI marker in tail of %s\n", filename);
+    }
+    return foundEOI;
 }

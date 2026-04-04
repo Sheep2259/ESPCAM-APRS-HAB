@@ -76,18 +76,12 @@ void setup() {
 
   delay(3000);
 
-  pinMode(33, OUTPUT);
-
   Serial.print("3");
-  digitalWrite(33, LOW);
   delay(1000);
   Serial.print("2");
-  digitalWrite(33, HIGH);
   delay(1000);
   Serial.print("1");
-  digitalWrite(33, LOW);
   delay(1000); 
-  digitalWrite(33, HIGH);
 
   bool cameraReady = false;
   int initRetries = 0;
@@ -186,7 +180,7 @@ void loop() {
               hour, minute, second, centisecond,
               alt, speed_kmh, course_deg,
               sats, hdop);
-              
+
       if (hdop < 20){
         gpserr = 0;
       }     
@@ -206,7 +200,46 @@ void loop() {
     quality = locationQuality(lat, lng);
 
     if (quality == 1){
-      savePhoto(1, lat, lng, alt, timestampchars);
+      if (savePhoto(1, lat, lng, alt, timestampchars) == ESP_OK){
+        camcaptureerr = 0;
+        if (receptionlocation(lat, lng)){
+          lastIMGTime = (millis() - (IMG_interval * (3/4))); // wait 1/4 interval until next image 
+        }
+        else{
+          lastIMGTime = (millis() - (IMG_interval/2)); // wait 1/2 interval until next image 
+        }
+      }
+      else{
+        lastIMGTime = (millis() - (IMG_interval * (31/32))); // capture failed, so try again in 7.5m
+        camcaptureerr = 1;
+      }
+    }
+    else{
+      if (savePhoto(0, lat, lng, alt, timestampchars) == ESP_OK){
+        camcaptureerr = 0;
+        if (receptionlocation(lat, lng)){
+          lastIMGTime = (millis() - (IMG_interval/2)); // wait 1/2 interval until next image
+        }
+        else{
+          lastIMGTime = (millis() - (IMG_interval)); // wait full interval until next image 
+        }
+      }
+      else{
+        lastIMGTime = (millis() - (IMG_interval * (31/32))); // capture failed, so try again in 7.5m
+        camcaptureerr = 1;
+      }
+    }
+  }
+  
+
+  if ((lastquality == 0) && (quality == 1) && (millis() > 120000) && (hdop < 10)){
+    // when we enter a high quality area, take image
+    snprintf(timestampchars, sizeof(timestampchars), "%d/%d/%d/%d/%d", month, day, hour, minute, second);
+    if (savePhoto(1, lat, lng, alt, timestampchars)){
+      Serial.printf("savePhoto OK");
+      camcaptureerr = 0;
+
+      lastquality = 1; // so that it doesnt keep taking images
       if (receptionlocation(lat, lng)){
         lastIMGTime = (millis() - (IMG_interval * (3/4))); // wait 1/4 interval until next image 
       }
@@ -215,34 +248,15 @@ void loop() {
       }
     }
     else{
-      savePhoto(0, lat, lng, alt, timestampchars);
-      if (receptionlocation(lat, lng)){
-        lastIMGTime = (millis() - (IMG_interval/2)); // wait half interval until next image 
-      }
-      else{
-        lastIMGTime = (millis() - (IMG_interval)); // wait full interval until next image 
-      }
+      lastIMGTime = (millis() - (IMG_interval * (31/32))); // capture failed, so try again in 7.5m
+      camcaptureerr = 1; // capture failed, so try again in 7.5m
     }
-  }
-  
 
-  if ((lastquality == 0) && (quality == 1) && (millis() > 60000) && (hdop < 10)){
-    // when we enter a high quality area, take image
-    snprintf(timestampchars, sizeof(timestampchars), "%d/%d/%d/%d/%d", month, day, hour, minute, second);
-    esp_err_t result = savePhoto(1, lat, lng, alt, timestampchars);
-    Serial.printf("savePhoto result: %s\n", result == ESP_OK ? "OK" : "FAIL");
     
     // Dump savedImages so you can see if any slot got written
     for (int i = 0; i < 16; i++) {
         Serial.printf("savedImages[%d] = %d\n", i, savedImages[i]);
     }
-    lastquality = 1; // so that it doesnt keep taking images
-    if (receptionlocation(lat, lng)){
-        lastIMGTime = (millis() - (IMG_interval * (3/4))); // wait 1/4 interval until next image 
-      }
-      else{
-        lastIMGTime = (millis() - (IMG_interval/2)); // wait half interval until next image 
-      }
   }
 
 
@@ -264,7 +278,7 @@ void loop() {
       errorflags = packBools(gpserr, caminiterr, camcaptureerr, littlfserr, prefserr, encodererr, 0, 0);
 
       snprintf(telemmsg, sizeof(telemmsg), "T%d/%d/%d/%d/%dP%.0f/%.0f/%d/%.1fS%dE%02X", 
-        month, day, hour, minute, second, alt, speed_kmh, sats, hdop, counter, errorflags); // about 45 chars used
+        month, day, hour, minute, second, alt, speed_kmh, sats, hdop, counter, errorflags); // about 42 chars used
 
       lastTxTime = millis(); // Reset timer
 
@@ -286,16 +300,16 @@ void loop() {
       //transmit image packet
 
       if (hdop > 20){
-          gpserr = 1;
-          counter++; // only telem if no gps
-          lastTxTime = millis(); // dont want to send telem every 10s if cam broken, no point
-          return;
+        gpserr = 1;
+        counter++; // only telem if no gps
+        lastTxTime = millis(); // dont want to send telem every 10s if cam broken, no point
+        return;
       }
 
       int filenum = IMGnToTX(savedImages);
       if (filenum == -1){
-          Serial.println("no packets to send");
-          return;
+        Serial.println("no packets to send");
+        return;
       }
       // 4 least significant bits is image number, 4 most is random to create prng seed variability when not moving
       uint8_t identifier = 0; 

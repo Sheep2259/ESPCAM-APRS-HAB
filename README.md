@@ -12,7 +12,7 @@ ESP32-CAM flight computer for HAB missions. Transmits APRS telemetry over 2m AFS
 
 **Reception-aware accounting** - When over a known iGate coverage area (continental Europe, UK, coastal USA, Japan, eastern China, Scandinavia), ACKs parsed from downlinked LoRa packets decrement each image's remaining-packet counter. Images are deleted from LittleFS once fully acknowledged. Counters persist across reboots via NVS Preferences.
 
-**Quality zones** - Configurable polygons over visually interesting regions trigger a high-priority capture on zone entry and shorten the inter-image interval for the next orbit.
+**Quality zones** - Configurable polygons over visually interesting regions trigger a high-priority capture on zone entry and shorten the inter-image interval for the next capture.
 
 ---
 
@@ -67,7 +67,7 @@ Pin assignments for the SX1278 and GPS in `pin_defs.h`.
 ## Image TX Flow
 
 1. JPEG saved to LittleFS with GPS/timestamp metadata trailer; packet counter assigned.
-2. Each TX cycle: RLNC encoder produces a 53-byte coded packet seeded by current APRS position strings + random identifier byte.
+2. Each TX cycle: RLNC encoder produces a 53-byte coded packet seeded by current APRS position strings + identifier byte.
 3. 54-byte payload base91-encoded, sent as APRS message body.
-4. Counter decremented on ACK (if over iGate coverage). File deleted at zero.
+4. Counter decremented if over probable iGate coverage. File deleted at zero.
 5. Ground station reconstructs once it holds enough linearly independent packets.
