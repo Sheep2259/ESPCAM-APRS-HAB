@@ -248,27 +248,27 @@ void GEOFENCE_position(float latitude, float longitude)
 	GEOFENCE_loraAPRS_cr = 5;
 
     // --- PRIMARY ZONES (Specific) ---
-    if(pointInPolygonF(9, ArgParUruF, latitude, longitude) == 1)
+    if(pointInPolygonF(8, ArgParUruF, latitude, longitude) == 1)
     {
         GEOFENCE_2mAPRS_frequency = 144.930000;
         GEOFENCE_loraAPRS_frequency = 433.775;
     }
-    else if(pointInPolygonF(7, AustraliaF, latitude, longitude) == 1)
+    else if(pointInPolygonF(6, AustraliaF, latitude, longitude) == 1)
     {
         GEOFENCE_2mAPRS_frequency = 145.175000;
         GEOFENCE_loraAPRS_frequency = 433.775;
     }
-    else if(pointInPolygonF(10, BrazilF, latitude, longitude) == 1)
+    else if(pointInPolygonF(9, BrazilF, latitude, longitude) == 1)
     {
         GEOFENCE_2mAPRS_frequency = 145.570000;
         GEOFENCE_loraAPRS_frequency = 433.775;
     }
-    else if(pointInPolygonF(6, CostNicPanF, latitude, longitude) == 1)
+    else if(pointInPolygonF(5, CostNicPanF, latitude, longitude) == 1)
     {
         GEOFENCE_2mAPRS_frequency = 145.010000;
         GEOFENCE_loraAPRS_frequency = 433.775;
     }
-    else if(pointInPolygonF(8, VenezuelaF, latitude, longitude) == 1)
+    else if(pointInPolygonF(7, VenezuelaF, latitude, longitude) == 1)
     {
         GEOFENCE_2mAPRS_frequency = 145.010000;
         GEOFENCE_loraAPRS_frequency = 433.775;

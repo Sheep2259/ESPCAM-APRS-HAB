@@ -203,14 +203,14 @@ void loop() {
       if (savePhoto(1, lat, lng, alt, timestampchars) == ESP_OK){
         camcaptureerr = 0;
         if (receptionlocation(lat, lng)){
-          lastIMGTime = (millis() - (IMG_interval * (3/4))); // wait 1/4 interval until next image 
+          lastIMGTime = (millis() - ((IMG_interval * 3) / 4 )); // wait 1/4 interval until next image 
         }
         else{
-          lastIMGTime = (millis() - (IMG_interval/2)); // wait 1/2 interval until next image 
+          lastIMGTime = (millis() - (IMG_interval / 2)); // wait 1/2 interval until next image 
         }
       }
       else{
-        lastIMGTime = (millis() - (IMG_interval * (31/32))); // capture failed, so try again in 7.5m
+        lastIMGTime = (millis() - ((IMG_interval * 31) / 32)); // capture failed, so try again in 7.5m
         camcaptureerr = 1;
       }
     }
@@ -218,14 +218,14 @@ void loop() {
       if (savePhoto(0, lat, lng, alt, timestampchars) == ESP_OK){
         camcaptureerr = 0;
         if (receptionlocation(lat, lng)){
-          lastIMGTime = (millis() - (IMG_interval/2)); // wait 1/2 interval until next image
+          lastIMGTime = (millis() - (IMG_interval / 2)); // wait 1/2 interval until next image
         }
         else{
           lastIMGTime = (millis() - (IMG_interval)); // wait full interval until next image 
         }
       }
       else{
-        lastIMGTime = (millis() - (IMG_interval * (31/32))); // capture failed, so try again in 7.5m
+        lastIMGTime = (millis() - ((IMG_interval * 31) / 32 )); // capture failed, so try again in 7.5m
         camcaptureerr = 1;
       }
     }
@@ -235,20 +235,21 @@ void loop() {
   if ((lastquality == 0) && (quality == 1) && (millis() > 120000) && (hdop < 10)){
     // when we enter a high quality area, take image
     snprintf(timestampchars, sizeof(timestampchars), "%d/%d/%d/%d/%d", month, day, hour, minute, second);
-    if (savePhoto(1, lat, lng, alt, timestampchars)){
+    
+    if (savePhoto(1, lat, lng, alt, timestampchars) == ESP_OK){
       Serial.printf("savePhoto OK");
       camcaptureerr = 0;
 
       lastquality = 1; // so that it doesnt keep taking images
       if (receptionlocation(lat, lng)){
-        lastIMGTime = (millis() - (IMG_interval * (3/4))); // wait 1/4 interval until next image 
+        lastIMGTime = (millis() - ((IMG_interval * 3) / 4 )); // wait 1/4 interval until next image 
       }
       else{
-        lastIMGTime = (millis() - (IMG_interval/2)); // wait half interval until next image 
+        lastIMGTime = (millis() - (IMG_interval / 2)); // wait half interval until next image 
       }
     }
     else{
-      lastIMGTime = (millis() - (IMG_interval * (31/32))); // capture failed, so try again in 7.5m
+      lastIMGTime = (millis() - ((IMG_interval * 31) / 32 )); // capture failed, so try again in 7.5m
       camcaptureerr = 1; // capture failed, so try again in 7.5m
     }
 
