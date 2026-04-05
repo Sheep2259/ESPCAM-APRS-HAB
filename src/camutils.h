@@ -36,5 +36,6 @@ int IMGnToTX(uint16_t savedImages[]);
 esp_err_t StartCamera();
 camera_fb_t* captureJpeg();
 void resetCamera();
+uint8_t countStoredImages(const uint16_t* savedImages);
 
 #endif

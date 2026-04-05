@@ -242,10 +242,12 @@ static float Am2[] = {
     -124.10579, 47.78299
 };
 
-bool reception = 0;
+
 
 bool receptionlocation(float latitude, float longitude)
 {
+    bool reception = 0;
+    
     // --- PRIMARY ZONES (Specific) ---
     if(pointInPolygonF(15, America, latitude, longitude) == 1)
     {

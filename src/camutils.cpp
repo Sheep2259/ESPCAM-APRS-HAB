@@ -401,7 +401,14 @@ int IMGnToTX(uint16_t savedImages[]) {
   return validItems[count - 1].index;
 }
 
-
+// how many images stored?
+uint8_t countStoredImages(const uint16_t* savedImages) {
+    uint8_t count = 0;
+    for (int i = 0; i < 16; i++) {
+        if (savedImages[i] != 0) count++;
+    }
+    return count;
+}
 
 // -------------------------------------------------------
 // validateJpegBuffer()

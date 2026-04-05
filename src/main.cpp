@@ -25,6 +25,9 @@ const unsigned long IMG_interval  = 14400000;
 // sync remaining packets to preferences (flash) every 10 mins
 const unsigned updateprefs = 600000;
 
+// how long without a position change before we inject a fake seed (ms) (gps failure fallback for images)
+const unsigned long GPS_SEED_REFRESH_MS = 300000UL; // 5 minutes
+
 
 
 uint32_t counter = 0;
@@ -55,6 +58,7 @@ uint8_t errorflags;
 unsigned long lastTxTime = 0;
 unsigned long lastIMGTime = 0;
 unsigned long lastprefsupdatetime = 0;
+unsigned long lastTransitionCaptureTime = 0;
 
 unsigned quality = 0;
 unsigned lastquality = 0;
@@ -66,7 +70,32 @@ LinearErasureCoder coder(53); // 53 byte packets
 
 char timestampchars[30];
 
+float lastKnownLat = 0.0f;
+float lastKnownLng = 0.0f;
+unsigned long lastPositionChangeTime = 0;
 
+
+// Call after formatting timestampchars and determining quality.
+// Updates lastIMGTime and camcaptureerr; returns true on successful capture.
+bool captureAndSchedule(int quality, float lat, float lng, float alt, const char* timestampchars) {
+    if (savePhoto(quality, lat, lng, alt, timestampchars) == ESP_OK) {
+        camcaptureerr = 0;
+        if (receptionlocation(lat, lng)) {
+            // High-quality loc: wait 1/4 interval; low-quality loc: wait 1/2 interval
+            lastIMGTime = millis() - (quality == 1 ? (IMG_interval * 3) / 4
+                                                   :  IMG_interval / 2);
+        } else {
+            // High-quality loc: wait 1/2 interval; low-quality loc: wait full interval
+            lastIMGTime = millis() - (quality == 1 ?  IMG_interval / 2
+                                                   :  IMG_interval);
+        }
+        return true;
+    } else {
+        lastIMGTime = millis() - (IMG_interval * 31) / 32; // retry in ~7.5 min
+        camcaptureerr = 1;
+        return false;
+    }
+}
 
 
 
@@ -168,6 +197,7 @@ void setup() {
   Serial.printf("LittleFS used:  %u bytes\n", LittleFS.usedBytes());
   Serial.printf("LittleFS free:  %u bytes\n", LittleFS.totalBytes() - LittleFS.usedBytes());
 
+  lastPositionChangeTime = millis();
 }
 
 
@@ -183,7 +213,20 @@ void loop() {
 
       if (hdop < 20){
         gpserr = 0;
-      }     
+      }
+
+      quality = locationQuality(lat, lng);
+
+      if (quality == 0){
+        lastquality = 0;
+      }
+
+      // track real position changes to detect gps fails
+      if (lat != lastKnownLat || lng != lastKnownLng) {
+        lastKnownLat = lat;
+        lastKnownLng = lng;
+        lastPositionChangeTime = millis();
+      }
 		}
 	} 
   
@@ -194,70 +237,52 @@ void loop() {
   }
 
 
-  if ((millis() - lastIMGTime) >= IMG_interval){
-    // dont need to check for free image slot as it will be discarded if no slot available
+    // --- 1. Periodic interval capture ---
+  if ((millis() - lastIMGTime) >= IMG_interval) {
     snprintf(timestampchars, sizeof(timestampchars), "%d/%d/%d/%d/%d", month, day, hour, minute, second);
     quality = locationQuality(lat, lng);
-
-    if (quality == 1){
-      if (savePhoto(1, lat, lng, alt, timestampchars) == ESP_OK){
-        camcaptureerr = 0;
-        if (receptionlocation(lat, lng)){
-          lastIMGTime = (millis() - ((IMG_interval * 3) / 4 )); // wait 1/4 interval until next image 
-        }
-        else{
-          lastIMGTime = (millis() - (IMG_interval / 2)); // wait 1/2 interval until next image 
-        }
-      }
-      else{
-        lastIMGTime = (millis() - ((IMG_interval * 31) / 32)); // capture failed, so try again in 7.5m
-        camcaptureerr = 1;
-      }
-    }
-    else{
-      if (savePhoto(0, lat, lng, alt, timestampchars) == ESP_OK){
-        camcaptureerr = 0;
-        if (receptionlocation(lat, lng)){
-          lastIMGTime = (millis() - (IMG_interval / 2)); // wait 1/2 interval until next image
-        }
-        else{
-          lastIMGTime = (millis() - (IMG_interval)); // wait full interval until next image 
-        }
-      }
-      else{
-        lastIMGTime = (millis() - ((IMG_interval * 31) / 32 )); // capture failed, so try again in 7.5m
-        camcaptureerr = 1;
-      }
-    }
+    captureAndSchedule(quality, lat, lng, alt, timestampchars);
   }
-  
 
-  if ((lastquality == 0) && (quality == 1) && (millis() > 120000) && (hdop < 10)){
-    // when we enter a high quality area, take image
+  // --- 2. Transition into high-quality area ---
+  if ((lastquality == 0) && (quality == 1) && (millis() > 120000) && (hdop < 10) && ((millis() - lastTransitionCaptureTime) > 600000)) {
     snprintf(timestampchars, sizeof(timestampchars), "%d/%d/%d/%d/%d", month, day, hour, minute, second);
-    
-    if (savePhoto(1, lat, lng, alt, timestampchars) == ESP_OK){
+    if (captureAndSchedule(1, lat, lng, alt, timestampchars)) {
       Serial.printf("savePhoto OK");
-      camcaptureerr = 0;
-
-      lastquality = 1; // so that it doesnt keep taking images
-      if (receptionlocation(lat, lng)){
-        lastIMGTime = (millis() - ((IMG_interval * 3) / 4 )); // wait 1/4 interval until next image 
-      }
-      else{
-        lastIMGTime = (millis() - (IMG_interval / 2)); // wait half interval until next image 
-      }
-    }
-    else{
-      lastIMGTime = (millis() - ((IMG_interval * 31) / 32 )); // capture failed, so try again in 7.5m
-      camcaptureerr = 1; // capture failed, so try again in 7.5m
-    }
-
-    
-    // Dump savedImages so you can see if any slot got written
-    for (int i = 0; i < 16; i++) {
+      lastTransitionCaptureTime = millis();
+      lastquality = 1; // prevent re-triggering
+      for (int i = 0; i < 16; i++)
         Serial.printf("savedImages[%d] = %d\n", i, savedImages[i]);
     }
+  }
+
+  // --- 3. No stored images — take one now ---
+  if ((millis() > 120000) && (hdop < 10) && (IMGnToTX(savedImages) == -1)) {
+    snprintf(timestampchars, sizeof(timestampchars), "%d/%d/%d/%d/%d", month, day, hour, minute, second);
+    quality = locationQuality(lat, lng);
+    captureAndSchedule(quality, lat, lng, alt, timestampchars);
+  }
+
+
+// If position has been frozen for GPS_SEED_REFRESH_MS, inject a random
+// Antarctic seed.  Randomised every 5 min so each refresh window produces
+// a fresh set of linearly-independent RLNC packets.
+// The fake coords are also transmitted so ground can always reconstruct.
+if ((millis() - lastPositionChangeTime) >= GPS_SEED_REFRESH_MS) {
+
+  // Box: 85°S–86°S, 0°E–90°E - unreachable by any northern hemisphere HAB
+  float fakeLat = -85.0f - (float)(esp_random() % 10000) / 10000.0f; // -85.0000 to -85.9999
+  float fakeLng =           (float)(esp_random() % 900000) / 10000.0f; //   0.0000 to 89.9999
+
+  aprsFormatLat(fakeLat, latitudechars, sizeof(latitudechars));
+  aprsFormatLng(fakeLng, longitudechars, sizeof(longitudechars));
+
+  // Advance the window so coords refresh again after another 5 min
+  lastPositionChangeTime = millis();
+
+  gpserr = 1; // keep error flag set — ground can see GPS is down
+  Serial.printf("GPS seed fallback: using fake coords %s %s\n",
+                latitudechars, longitudechars);
   }
 
 
@@ -277,9 +302,22 @@ void loop() {
 
     if ((counter % telempacketinterval) == 0){
       errorflags = packBools(gpserr, caminiterr, camcaptureerr, littlfserr, prefserr, encodererr, 0, 0);
+      
+      uint8_t imgLo = packBools(
+        savedImages[0] != 0, savedImages[1] != 0,
+        savedImages[2] != 0, savedImages[3] != 0,
+        savedImages[4] != 0, savedImages[5] != 0,
+        savedImages[6] != 0, savedImages[7] != 0
+        );
+      uint8_t imgHi = packBools(
+        savedImages[8]  != 0, savedImages[9]  != 0,
+        savedImages[10] != 0, savedImages[11] != 0,
+        savedImages[12] != 0, savedImages[13] != 0,
+        savedImages[14] != 0, savedImages[15] != 0
+        );
 
-      snprintf(telemmsg, sizeof(telemmsg), "T%d/%d/%d/%d/%dP%.0f/%.0f/%d/%.1fS%dE%02X", 
-        month, day, hour, minute, second, alt, speed_kmh, sats, hdop, counter, errorflags); // about 42 chars used
+      snprintf(telemmsg, sizeof(telemmsg), "T%d/%d/%d/%d/%dP%.0f/%.0f/%d/%.1fS%dE%02XI%02X%02X", 
+        month, day, hour, minute, second, alt, speed_kmh, sats, hdop, counter, errorflags, imgLo, imgHi); // about 47 chars used
 
       lastTxTime = millis(); // Reset timer
 
@@ -338,7 +376,7 @@ void loop() {
         Serial.printf("%s, %s, %s", latitudechars, longitudechars, outputBuffer);
         Serial.println();
 
-        if (receptionlocation(lat, lng)){
+        if (receptionlocation(lat, lng) && (savedImages[filenum] > 0)){
         savedImages[filenum]--; // if pretty sure packet recieved, decrement remaining for that image
         }
 
