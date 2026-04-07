@@ -26,7 +26,7 @@ const unsigned long IMG_interval  = 14400000;
 const unsigned updateprefs = 600000;
 
 // how long without a position change before we inject a fake seed (ms) (gps failure fallback for images)
-const unsigned long GPS_SEED_REFRESH_MS = 9000UL; // 9s
+const unsigned long GPS_SEED_REFRESH_MS = 32000UL; // 32s
 
 
 
