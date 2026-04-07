@@ -26,7 +26,7 @@ const unsigned long IMG_interval  = 14400000;
 const unsigned updateprefs = 600000;
 
 // how long without a position change before we inject a fake seed (ms) (gps failure fallback for images)
-const unsigned long GPS_SEED_REFRESH_MS = 300000UL; // 5 minutes
+const unsigned long GPS_SEED_REFRESH_MS = 9000UL; // 9s
 
 
 
@@ -87,7 +87,7 @@ bool captureAndSchedule(int quality, float lat, float lng, float alt, const char
         } else {
             // High-quality loc: wait 1/2 interval; low-quality loc: wait full interval
             lastIMGTime = millis() - (quality == 1 ?  IMG_interval / 2
-                                                   :  IMG_interval);
+                                                   :  0);
         }
         return true;
     } else {
@@ -256,34 +256,15 @@ void loop() {
     }
   }
 
-  // --- 3. No stored images — take one now ---
-  if ((millis() > 120000) && (hdop < 10) && (IMGnToTX(savedImages) == -1)) {
+  // --- 3. No stored images, take one now ---
+  if ((millis() > 60000) && (IMGnToTX(savedImages) == -1)) {
     snprintf(timestampchars, sizeof(timestampchars), "%d/%d/%d/%d/%d", month, day, hour, minute, second);
     quality = locationQuality(lat, lng);
     captureAndSchedule(quality, lat, lng, alt, timestampchars);
+    for (int i = 0; i < 16; i++)
+      Serial.printf("savedImages[%d] = %d\n", i, savedImages[i]);
   }
 
-
-// If position has been frozen for GPS_SEED_REFRESH_MS, inject a random
-// Antarctic seed.  Randomised every 5 min so each refresh window produces
-// a fresh set of linearly-independent RLNC packets.
-// The fake coords are also transmitted so ground can always reconstruct.
-if ((millis() - lastPositionChangeTime) >= GPS_SEED_REFRESH_MS) {
-
-  // Box: 85°S–86°S, 0°E–90°E - unreachable by any northern hemisphere HAB
-  float fakeLat = -85.0f - (float)(esp_random() % 10000) / 10000.0f; // -85.0000 to -85.9999
-  float fakeLng =           (float)(esp_random() % 900000) / 10000.0f; //   0.0000 to 89.9999
-
-  aprsFormatLat(fakeLat, latitudechars, sizeof(latitudechars));
-  aprsFormatLng(fakeLng, longitudechars, sizeof(longitudechars));
-
-  // Advance the window so coords refresh again after another 5 min
-  lastPositionChangeTime = millis();
-
-  gpserr = 1; // keep error flag set — ground can see GPS is down
-  Serial.printf("GPS seed fallback: using fake coords %s %s\n",
-                latitudechars, longitudechars);
-  }
 
 
   //transmit stuff below here
@@ -292,12 +273,28 @@ if ((millis() - lastPositionChangeTime) >= GPS_SEED_REFRESH_MS) {
 
     lastTxTime = millis();
 
-
     aprsFormatLat(lat, latitudechars, sizeof(latitudechars));
     aprsFormatLng(lng, longitudechars, sizeof(longitudechars));
+
+    // If position has been frozen for GPS_SEED_REFRESH_MS, inject a random
+    // Antarctic seed.  Randomised so each tx window produces
+    // a fresh set of linearly-independent RLNC packets.
+    // The fake coords are also transmitted so ground can always reconstruct.
+    if (((millis() - lastPositionChangeTime) >= GPS_SEED_REFRESH_MS) || (lat == 0 && lng == 0)) {
+
+      // Box: 85°S–86°S, 0°E–90°E - unreachable by any northern hemisphere HAB
+      float fakeLat = -85.0f - (float)(esp_random() % 10000) / 10000.0f; // -85.0000 to -85.9999
+      float fakeLng =           (float)(esp_random() % 900000) / 10000.0f; //   0.0000 to 89.9999
+
+      aprsFormatLat(fakeLat, latitudechars, sizeof(latitudechars));
+      aprsFormatLng(fakeLng, longitudechars, sizeof(longitudechars));
+
+      gpserr = 1; // keep error flag set — ground can see GPS is down
+      Serial.printf("GPS seed fallback: using fake coords %s %s\n",
+                    latitudechars, longitudechars);
+    }
+
     GEOFENCE_position(lat, lng);
-
-
 
 
     if ((counter % telempacketinterval) == 0){
@@ -338,16 +335,11 @@ if ((millis() - lastPositionChangeTime) >= GPS_SEED_REFRESH_MS) {
     else {
       //transmit image packet
 
-      if (hdop > 20){
-        gpserr = 1;
-        counter++; // only telem if no gps
-        lastTxTime = millis(); // dont want to send telem every 10s if cam broken, no point
-        return;
-      }
-
       int filenum = IMGnToTX(savedImages);
       if (filenum == -1){
         Serial.println("no packets to send");
+        lastTxTime = millis();
+        counter++;
         return;
       }
       // 4 least significant bits is image number, 4 most is random to create prng seed variability when not moving

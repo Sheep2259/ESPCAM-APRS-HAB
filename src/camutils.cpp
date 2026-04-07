@@ -304,7 +304,7 @@ esp_err_t savePhoto(uint8_t quality, double lat, double lng, float alt, const ch
 
             Serial.printf("savePhoto: slot %d validated OK\n", i);
 
-            savedImages[i] = (uint16_t)ceil((finalSize * 1.1) / 53.0);
+            savedImages[i] = (uint16_t)ceil((finalSize * 1.2) / 53.0);
             imageVersion[i]++;
             prefs.putBytes("version", imageVersion, sizeof(imageVersion));
             prefs.putBytes("remain", savedImages, sizeof(savedImages));
